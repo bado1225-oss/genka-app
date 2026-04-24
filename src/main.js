@@ -63,20 +63,42 @@ function migrateLegacy(){
       i.standard_price = num(i.kg_price);
     }
   });
-  // レシピの v3 フィールド補完
+  // v4 レシピ簡素化: per_serving_desc → servings/notes, target_cost_ratio → target_food_cost_rate
   state.recipes.forEach(r => {
     if(r.selling_price === undefined) r.selling_price = 0;
-    if(r.target_cost_ratio === undefined) r.target_cost_ratio = 30;
-    if(r.target_margin === undefined) r.target_margin = 0;
-    if(r.piece_weight_g === undefined) r.piece_weight_g = 17;
-    if(r.skin_weight_per_piece === undefined) r.skin_weight_per_piece = 10;
-    // v3.1 追加コスト
-    if(r.labor_prep_cost === undefined) r.labor_prep_cost = 0;
-    if(r.labor_cook_cost === undefined) r.labor_cook_cost = 0;
-    if(r.utility_cost === undefined) r.utility_cost = 0;
-    if(r.other_cost === undefined) r.other_cost = 0;
-    if(r.oil_cost_per_plate === undefined) r.oil_cost_per_plate = 0;
-    if(r.sauce_cost_per_plate === undefined) r.sauce_cost_per_plate = 0;
+    // servings: per_serving_desc "5個" 等から抽出試行、なければ 1
+    if(r.servings === undefined){
+      const pieces = parsePiecesFromDesc(r.per_serving_desc);
+      r.servings = 1; // デフォルト 1人前/皿
+      if(pieces && !r.notes){
+        r.notes = r.per_serving_desc || '';
+      }
+    }
+    if(r.target_food_cost_rate === undefined){
+      r.target_food_cost_rate = num(r.target_cost_ratio, 30);
+    }
+    if(r.notes === undefined) r.notes = r.per_serving_desc || '';
+    if(r.category === undefined) r.category = '';
+    // 旧フィールドは保持しない(消去)
+    delete r.per_serving_desc;
+    delete r.target_cost_ratio;
+    delete r.target_margin;
+    delete r.piece_weight_g;
+    delete r.skin_weight_per_piece;
+    delete r.labor_prep_cost;
+    delete r.labor_cook_cost;
+    delete r.utility_cost;
+    delete r.other_cost;
+    delete r.oil_cost_per_plate;
+    delete r.sauce_cost_per_plate;
+    // items: grams → quantity, unit 追加、yield_pct/price_override は保持(UI非表示)
+    (r.items||[]).forEach(it => {
+      if(it.quantity === undefined){
+        it.quantity = num(it.grams, 0);
+      }
+      if(it.unit === undefined) it.unit = 'g';
+      delete it.grams;
+    });
   });
   state.recipes.forEach(r => {
     // 皮を通常食材として items に追加
@@ -165,23 +187,12 @@ function makeRecipe(init){
   return Object.assign({
     id: uid('rec'),
     name: '新規レシピ',
-    category: '餃子',
-    per_serving_desc: '',
+    category: '',                   // 任意(和食/中華/麺類等)
+    servings: 1,                    // 何人前/1皿(sharing dishで>1)
+    selling_price: 0,               // 店内販売価格(1皿)
+    target_food_cost_rate: 30,      // 目標原価率(%)
+    notes: '',                      // フリーメモ
     items: [],
-    // v3 拡張フィールド(販売価格シミュレーター)
-    selling_price: 0,          // 店内販売価格(1皿)
-    target_cost_ratio: 30,     // 目標原価率(%)
-    target_margin: 0,          // 目標粗利額(円)
-    // 餃子専用
-    piece_weight_g: 17,        // 1個重量(g)
-    skin_weight_per_piece: 10, // 1個あたり皮重量(g)
-    // v3.1 追加コスト(店内提供向け・任意入力)
-    labor_prep_cost: 0,        // 仕込み人件費(1皿あたり)
-    labor_cook_cost: 0,        // 調理人件費(1皿あたり)
-    utility_cost: 0,           // 光熱費(1皿あたり)
-    other_cost: 0,             // その他製造コスト(1皿あたり)
-    oil_cost_per_plate: 0,     // 焼成油原価(餃子等・1皿あたり)
-    sauce_cost_per_plate: 0,   // タレ原価(餃子等・1皿あたり)
     updated_at: new Date().toISOString(),
   }, init||{});
 }
@@ -189,13 +200,11 @@ function makeItem(init){
   const base = {
     id: uid('it'),
     ingredient_id: null,
-    grams: 0,
-    yield_pct: 100, // 歩留まり(%) 100=ロスなし、50=半分ロス(実仕入は2倍必要)
-    price_override: null, // このレシピでのみ適用する kg単価(null=マスタ値を使用)
+    quantity: 0,             // 使用量 (unit に応じた数値)
+    unit: 'g',               // g / ml / 個
     selected_category: null, // UI: カテゴリ選択状態(食材選択時に自動セット)
   };
   const obj = Object.assign(base, init||{});
-  // ingredient_id から category 自動導出
   if(obj.ingredient_id && !obj.selected_category){
     const ing = getIngredient(obj.ingredient_id);
     if(ing) obj.selected_category = ing.category;
@@ -233,71 +242,53 @@ function calcRecipe(r){
   const items = r.items || [];
   const rows = items.map(it => {
     const ing = getIngredient(it.ingredient_id);
-    const price = effectivePrice(it);
-    const g = num(it.grams);
+    const price = effectivePrice(it); // kg単価 (円/kg 想定)
+    const qty = num(it.quantity, 0);
+    const unit = it.unit || 'g';
     const yp = num(it.yield_pct, 100);
     const yield_rate = yp > 0 ? yp/100 : 1;
-    const raw_g = g / yield_rate; // 歩留前(仕入)重量
-    const loss_rate = ing ? num(ing.loss_rate, 0) : 0;
-    const raw_with_loss = raw_g * (1 + loss_rate); // ロス込み必要量
+    const raw_qty = qty / yield_rate;
     const has_price = price != null && ing;
-    const cost = has_price ? raw_g * (price/1000) : 0;
-    const cost_with_loss = has_price ? raw_with_loss * (price/1000) : 0;
-    return { item: it, ingredient: ing, price, g, raw_g, raw_with_loss, loss_rate, yield_pct: yp, cost, cost_with_loss, has_price };
+    // unit に応じた原価: g/ml は kg単価/1000, 個 は kg単価=個単価 として扱う
+    const unitPrice = (unit === '個' || unit === '枚' || unit === '本') ? num(price) : num(price)/1000;
+    const cost = has_price ? raw_qty * unitPrice : 0;
+    return { item: it, ingredient: ing, price, qty, unit, raw_qty, yield_pct: yp, cost, has_price };
   });
   const ing_cost = rows.reduce((s,x)=>s+x.cost, 0);
-  const ing_cost_with_loss = rows.reduce((s,x)=>s+x.cost_with_loss, 0);
-  const total_g = rows.reduce((s,x)=>s+x.g, 0);
-  const mass_g = rows.reduce((s,x)=>s+x.raw_g, 0);
-  const mass_with_loss = rows.reduce((s,x)=>s+x.raw_with_loss, 0);
-  const per_cost = ing_cost;
-  const per_cost_with_loss = ing_cost_with_loss;
-  const mass_total = mass_g || 1;
+  const total_qty = rows.reduce((s,x)=>s + (x.unit==='個'||x.unit==='枚'||x.unit==='本'?0:x.qty), 0);
+  const raw_total = rows.reduce((s,x)=>s + (x.unit==='個'||x.unit==='枚'||x.unit==='本'?0:x.raw_qty), 0);
   rows.forEach(x => {
-    x.mass_ratio = x.raw_g / mass_total;
-    x.cost_ratio = ing_cost > 0 ? x.cost / ing_cost : 0;
+    x.cost_ratio_of_total = ing_cost > 0 ? x.cost / ing_cost : 0;
   });
-  // #1 1個あたり原価(per_serving_desc から個数抽出)
-  const pieces = parsePiecesFromDesc(r.per_serving_desc);
-  const per_piece_cost = pieces ? per_cost / pieces : null;
-  // v3.1 餡/皮内訳 (餃子向け)
-  const skin_cost = rows.filter(x => x.ingredient && x.ingredient.category === '皮').reduce((s,x)=>s+x.cost, 0);
-  const an_cost = per_cost - skin_cost; // 皮以外
-  // v3.1 追加コスト (店内提供)
-  const labor_prep = num(r.labor_prep_cost, 0);
-  const labor_cook = num(r.labor_cook_cost, 0);
-  const labor_total = labor_prep + labor_cook;
-  const utility = num(r.utility_cost, 0);
-  const other = num(r.other_cost, 0);
-  const oil = num(r.oil_cost_per_plate, 0);
-  const sauce = num(r.sauce_cost_per_plate, 0);
-  const additional_cost = labor_total + utility + other + oil + sauce;
-  const total_per_plate = per_cost + additional_cost;
-  // #2 販売価格シミュレーター (1皿原価ベース)
+  const servings = Math.max(1, num(r.servings, 1));
+  const per_plate_cost = ing_cost;            // 1皿原価(材料のみ)
+  const per_serving_cost = ing_cost / servings; // 1人前原価
   const selling = num(r.selling_price, 0);
-  const target_cr = num(r.target_cost_ratio, 30) / 100;
-  const target_margin = num(r.target_margin, 0);
-  const cost_ratio = selling > 0 ? total_per_plate / selling : 0;
-  const margin = selling - total_per_plate;
+  const target_rate = num(r.target_food_cost_rate, 30) / 100;
+  const cost_ratio = selling > 0 ? per_plate_cost / selling : 0;
+  const margin = selling - per_plate_cost;
   const margin_ratio = selling > 0 ? margin / selling : 0;
-  const suggested_price_by_ratio = target_cr > 0 ? total_per_plate / target_cr : 0;
-  const suggested_price_by_margin = total_per_plate + target_margin;
-  const over_target = selling > 0 && cost_ratio > target_cr;
+  const suggested_price = target_rate > 0 ? per_plate_cost / target_rate : 0;
+  const over_target = selling > 0 && cost_ratio > target_rate;
   return {
-    rows, ing_cost, total_g, mass_g, per_cost, per_piece_cost, pieces,
-    ing_cost_with_loss, per_cost_with_loss, mass_with_loss,
-    skin_cost, an_cost,
-    labor_prep, labor_cook, labor_total, utility, other, oil, sauce,
-    additional_cost, total_per_plate,
+    rows, ing_cost, total_qty, raw_total,
+    servings, per_plate_cost, per_serving_cost,
     selling, cost_ratio, margin, margin_ratio,
-    suggested_price_by_ratio, suggested_price_by_margin,
-    target_cost_ratio: target_cr, target_margin, over_target,
+    suggested_price, target_rate, over_target,
   };
+}
+
+// 原価率の絶対色分け (≤30 緑 / 30-35 黄 / >35 赤)
+function costRateClass(cost_ratio){
+  const p = cost_ratio * 100;
+  if(p <= 30) return 'cr-low';
+  if(p <= 35) return 'cr-mid';
+  return 'cr-high';
 }
 
 // ============ タブ制御 ============
 function showTab(tab){
-  const tabs = ['recipes','master','tools','settings'];
+  const tabs = ['recipes','master','settings'];
   tabs.forEach(t => {
     const seg = document.getElementById('seg-'+t);
     if(seg) seg.classList.toggle('active', t===tab);
@@ -306,8 +297,6 @@ function showTab(tab){
   });
   if(tab==='recipes'){ backToList(); }
   if(tab==='master'){ renderMaster(); }
-  if(tab==='tools'){ calcScrap(); calcDewater(); calcEmulsion(); }
-  if(tab==='settings'){}
   renderHero();
 }
 
@@ -317,8 +306,8 @@ function renderHero(){
   const calcs = state.recipes.map(r=>({r, c:calcRecipe(r)})).filter(x=>x.c);
   const withSelling = calcs.filter(x=>x.c.selling>0);
   const avgCR = withSelling.length ? withSelling.reduce((s,x)=>s+x.c.cost_ratio,0)/withSelling.length : 0;
-  // 原価率30%以上のメニュー
-  const highCR = withSelling.filter(x => x.c.cost_ratio >= 0.30);
+  // 原価率が35%超(赤)のメニュー (色分け基準に合わせる)
+  const highCR = withSelling.filter(x => x.c.cost_ratio*100 > 35);
   const top5CR = [...withSelling].sort((a,b)=>b.c.cost_ratio-a.c.cost_ratio).slice(0,5);
   const top5MarginHigh = [...withSelling].sort((a,b)=>b.c.margin-a.c.margin).slice(0,5);
   const top5MarginLow = [...withSelling].sort((a,b)=>a.c.margin-b.c.margin).slice(0,5);
@@ -340,14 +329,14 @@ function renderHero(){
   document.getElementById('dashboard-kpis').innerHTML = `
     <div class="kpi"><div class="kpi-label">登録メニュー</div><div class="kpi-value">${recipes}</div></div>
     <div class="kpi"><div class="kpi-label">食材マスタ</div><div class="kpi-value">${ings}</div></div>
-    <div class="kpi"><div class="kpi-label">平均原価率</div><div class="kpi-value ${avgCR>=0.3?'warn':'accent'}">${withSelling.length?fmt(avgCR*100,1)+'%':'–'}</div></div>
-    <div class="kpi"><div class="kpi-label">原価率30%以上</div><div class="kpi-value ${highCR.length?'warn':''}">${highCR.length}</div></div>
+    <div class="kpi"><div class="kpi-label">平均原価率</div><div class="kpi-value ${avgCR>0.35?'warn':'accent'}">${withSelling.length?fmt(avgCR*100,1)+'%':'–'}</div></div>
+    <div class="kpi"><div class="kpi-label">要改善(35%超)</div><div class="kpi-value ${highCR.length?'warn':''}">${highCR.length}</div></div>
     <div class="kpi"><div class="kpi-label">価格更新必要</div><div class="kpi-value ${stale.length?'warn':''}">${stale.length}</div></div>
   `;
   const extraWrap = document.getElementById('dashboard-extra');
   if(extraWrap){
     const highCRBlock = highCR.length ? `<div class="dash-block">
-      <div class="dash-block-title">⚠ 原価率30%以上のメニュー (${highCR.length})</div>
+      <div class="dash-block-title">⚠ 原価率35%超のメニュー (${highCR.length})</div>
       <ul class="dash-list">${highCR.slice(0,8).map(x=>`<li><a onclick="openRecipe('${x.r.id}')">${esc(x.r.name)}</a><span class="dash-val warn">${fmt(x.c.cost_ratio*100,1)}%</span></li>`).join('')}${highCR.length>8?`<li class="muted">他 ${highCR.length-8}件</li>`:''}</ul>
     </div>` : '';
     const marginHighBlock = top5MarginHigh.length ? `<div class="dash-block">
@@ -402,10 +391,10 @@ function renderRecipeList(){
   wrap.innerHTML = list.map(r => {
     const c = calcRecipe(r);
     const sel = state.selectedListId===r.id?' selected':'';
-    const unit = r.per_serving_desc ? `/${esc(r.per_serving_desc)}` : '/人前';
+    const crClass = c.selling>0 ? costRateClass(c.cost_ratio) : '';
     const crBadge = c.selling>0
-      ? `<div class="rc-cr-badge ${c.over_target?'warn':'ok'}">原価率 ${fmt(c.cost_ratio*100,1)}%</div>`
-      : '';
+      ? `<div class="rc-cr-badge ${crClass}">${fmt(c.cost_ratio*100,1)}%</div>`
+      : '<div class="rc-cr-badge muted">–</div>';
     const marginInfo = c.selling>0
       ? `<div>粗利 <b>¥${fmt(c.margin,0)}</b></div>`
       : '';
@@ -417,7 +406,7 @@ function renderRecipeList(){
       <div class="rc-name">${esc(r.name||'(無題)')}</div>
       <div class="rc-stats">
         <div>材料 <b>${r.items.length}</b></div>
-        <div>1人前 <b>¥${fmt(c.per_cost,0)}</b>${unit}</div>
+        <div>1皿 <b>¥${fmt(c.per_plate_cost,0)}</b></div>
         ${marginInfo}
       </div>
     </div>`;
@@ -461,31 +450,12 @@ function openRecipe(id){
   document.getElementById('recipe-list-pane').style.display = 'none';
   document.getElementById('recipe-edit-pane').style.display = '';
   document.getElementById('edit-name').value = r.name;
-  document.getElementById('edit-category').value = r.category;
-  document.getElementById('edit-serving-desc').value = r.per_serving_desc||'';
-  document.getElementById('scale-servings').value = 1;
-  // 販売価格シミュレーター
-  const spInput = document.getElementById('edit-selling-price');
-  if(spInput) spInput.value = num(r.selling_price, 0);
-  const tcrInput = document.getElementById('edit-target-cr');
-  if(tcrInput) tcrInput.value = num(r.target_cost_ratio, 30);
-  const tmInput = document.getElementById('edit-target-margin');
-  if(tmInput) tmInput.value = num(r.target_margin, 0);
-  // 餃子モード
-  const pwInput = document.getElementById('edit-piece-weight');
-  if(pwInput) pwInput.value = num(r.piece_weight_g, 17);
-  const swInput = document.getElementById('edit-skin-weight');
-  if(swInput) swInput.value = num(r.skin_weight_per_piece, 10);
-  // v3.1 追加コスト
-  const setV = (id, v) => { const el=document.getElementById(id); if(el) el.value = num(v,0); };
-  setV('edit-labor-prep', r.labor_prep_cost);
-  setV('edit-labor-cook', r.labor_cook_cost);
-  setV('edit-utility', r.utility_cost);
-  setV('edit-other-cost', r.other_cost);
-  setV('edit-oil-cost', r.oil_cost_per_plate);
-  setV('edit-sauce-cost', r.sauce_cost_per_plate);
+  document.getElementById('edit-category').value = r.category || '';
+  document.getElementById('edit-servings').value = num(r.servings, 1);
+  document.getElementById('edit-notes').value = r.notes || '';
+  document.getElementById('edit-selling-price').value = num(r.selling_price, 0);
+  document.getElementById('edit-target-cr').value = num(r.target_food_cost_rate, 30);
   document.getElementById('save-stamp').textContent = r.updated_at ? `最終保存 ${new Date(r.updated_at).toLocaleString('ja-JP')}` : '';
-  toggleGyozaMode();
   renderItems();
   recompute();
 }
@@ -517,32 +487,11 @@ function saveCurrent(){
 
 function writeBackForm(r){
   r.name = document.getElementById('edit-name').value || '(無題)';
-  r.category = document.getElementById('edit-category').value;
-  r.per_serving_desc = document.getElementById('edit-serving-desc').value || '';
-  const sp = document.getElementById('edit-selling-price');
-  if(sp) r.selling_price = num(sp.value, 0);
-  const tcr = document.getElementById('edit-target-cr');
-  if(tcr) r.target_cost_ratio = num(tcr.value, 30);
-  const tm = document.getElementById('edit-target-margin');
-  if(tm) r.target_margin = num(tm.value, 0);
-  const pw = document.getElementById('edit-piece-weight');
-  if(pw) r.piece_weight_g = num(pw.value, 17);
-  const sw = document.getElementById('edit-skin-weight');
-  if(sw) r.skin_weight_per_piece = num(sw.value, 10);
-  // v3.1 追加コスト
-  const lp = document.getElementById('edit-labor-prep');      if(lp) r.labor_prep_cost = num(lp.value, 0);
-  const lc = document.getElementById('edit-labor-cook');      if(lc) r.labor_cook_cost = num(lc.value, 0);
-  const uc = document.getElementById('edit-utility');         if(uc) r.utility_cost = num(uc.value, 0);
-  const oc = document.getElementById('edit-other-cost');      if(oc) r.other_cost = num(oc.value, 0);
-  const oil = document.getElementById('edit-oil-cost');       if(oil) r.oil_cost_per_plate = num(oil.value, 0);
-  const sauce = document.getElementById('edit-sauce-cost');   if(sauce) r.sauce_cost_per_plate = num(sauce.value, 0);
-}
-
-function toggleGyozaMode(){
-  const sel = document.getElementById('edit-category');
-  const card = document.getElementById('gyoza-mode-card');
-  if(!sel || !card) return;
-  card.style.display = sel.value === '餃子' ? '' : 'none';
+  r.category = document.getElementById('edit-category').value || '';
+  r.servings = Math.max(1, num(document.getElementById('edit-servings').value, 1));
+  r.notes = document.getElementById('edit-notes').value || '';
+  r.selling_price = num(document.getElementById('edit-selling-price').value, 0);
+  r.target_food_cost_rate = num(document.getElementById('edit-target-cr').value, 30);
 }
 
 function buildIngredientOptionsFiltered(category){
@@ -572,20 +521,17 @@ function renderItemCard(it, idx){
   const ingOptsWithSelected = it.ingredient_id
     ? ingOpts.replace(`value="${it.ingredient_id}"`, `value="${it.ingredient_id}" selected`)
     : ingOpts;
-  const priceInfo = ing ? priceBadgeHtml(ing, it) : '<span class="muted">未選択</span>';
   const price = effectivePrice(it);
+  const qty = num(it.quantity, 0);
+  const unit = it.unit || 'g';
   const yp = num(it.yield_pct, 100);
   const yield_rate = yp > 0 ? yp/100 : 1;
-  const raw_g = num(it.grams) / yield_rate;
-  const cost = (price!=null && ing) ? (raw_g * price/1000) : 0;
-  const masterPrice = ing ? num(ing.kg_price) : null;
-  const overridden = hasPriceOverride(it);
-  const priceVal = overridden ? it.price_override : (masterPrice!=null ? masterPrice : '');
-  const resetBtn = overridden
-    ? `<button type="button" class="reset-link" onclick="updateItem('${it.id}','price_override',null)" title="マスタ単価に戻す">↺</button>`
-    : '';
-  const yieldNote = yp < 100 ? `<span class="yield-hint">仕入必要 ${fmt(raw_g,1)}g</span>` : '';
-  return `<div class="item-card${overridden?' has-override':''}" data-id="${it.id}">
+  const raw_qty = qty / yield_rate;
+  const unitPrice = (unit === '個' || unit === '枚' || unit === '本') ? num(price) : num(price)/1000;
+  const cost = (price!=null && ing) ? (raw_qty * unitPrice) : 0;
+  const unitOpts = ['g','ml','個','枚','本'].map(u => `<option value="${u}"${unit===u?' selected':''}>${u}</option>`).join('');
+  const priceInfo = ing ? priceInfoHtml(ing) : '<span class="muted">未選択</span>';
+  return `<div class="item-card" data-id="${it.id}">
     <div class="item-row-main">
       <div class="item-selects-wrap">
         <select class="item-cat-select" onchange="updateItem('${it.id}','selected_category',this.value)">
@@ -600,37 +546,27 @@ function renderItemCard(it, idx){
       <button class="icon-del" onclick="removeItem('${it.id}')" title="削除">🗑</button>
     </div>
     <div class="item-row-fields">
-      <label class="inline-field">
-        <span>使用g</span>
-        <input type="number" step="0.1" value="${it.grams}" onchange="updateItem('${it.id}','grams',this.value)">
+      <label class="inline-field qty">
+        <span>使用量</span>
+        <input type="number" step="0.1" value="${qty}" onchange="updateItem('${it.id}','quantity',this.value)">
       </label>
-      <label class="inline-field price ${overridden?'override':''}">
-        <span>kg単価¥ ${resetBtn}</span>
-        <input type="number" step="1" value="${priceVal}" placeholder="${masterPrice!=null?fmt(masterPrice,0):'(食材未選択)'}" onchange="updateItem('${it.id}','price_override',this.value)" title="このレシピだけで使う kg単価。空欄でマスタ値に戻ります">
-      </label>
-      <label class="inline-field yield">
-        <span>歩留まり(%)</span>
-        <input type="number" step="0.1" min="0" max="100" value="${yp}" onchange="updateItem('${it.id}','yield_pct',this.value)" title="100=ロスなし / 80=20%ロス / 50=半分ロス(実仕入は使用gの2倍必要)">
+      <label class="inline-field unit">
+        <span>単位</span>
+        <select onchange="updateItem('${it.id}','unit',this.value)">${unitOpts}</select>
       </label>
     </div>
     <div class="item-row-info">
       ${priceInfo}
-      ${yieldNote}
       <span class="item-cost">原価 <b>¥${fmt(cost,2)}</b></span>
     </div>
   </div>`;
 }
 
-function priceBadgeHtml(ing, it){
+function priceInfoHtml(ing){
   const t = PRICE_TYPES[ing.price_type]||{};
   const master = num(ing.kg_price);
-  if(hasPriceOverride(it)){
-    const ov = num(it.price_override);
-    return `<span class="price-badge" style="background:${t.bg};color:${t.color}">${t.short||''}</span>
-      <span class="price-master-note">マスタ¥${fmt(master,0)}/kg</span>
-      <span class="price-override-note">→ このレシピ ¥${fmt(ov,0)}/kg</span>`;
-  }
-  return `<span class="price-badge" style="background:${t.bg};color:${t.color}">${t.short||''}</span> ¥${fmt(master,0)}/kg <span class="muted-sub">(マスタ値)</span>`;
+  const u = ing.unit || 'kg';
+  return `<span class="price-badge" style="background:${t.bg};color:${t.color}">${t.short||''}</span> ¥${fmt(master,0)}/${u}`;
 }
 
 function updateItem(id, key, value){
@@ -638,32 +574,23 @@ function updateItem(id, key, value){
   const it = r.items.find(x=>x.id===id); if(!it) return;
   if(key==='ingredient_id'){
     it.ingredient_id = value || null;
-    it.price_override = null;
-    // 食材を選んだら category も更新
     const ing = getIngredient(value);
-    if(ing) it.selected_category = ing.category;
+    if(ing){
+      it.selected_category = ing.category;
+      // 食材の基準単位に応じて unit をデフォルト
+      if(ing.unit === 'kg' || ing.unit === 'L' || !ing.unit) it.unit = it.unit || 'g';
+      else it.unit = ing.unit;
+    }
   } else if(key==='selected_category'){
     it.selected_category = value || null;
-    // カテゴリ変更時、現食材が不一致ならリセット
     const ing = getIngredient(it.ingredient_id);
     if(ing && ing.category !== it.selected_category){
       it.ingredient_id = null;
-      it.price_override = null;
     }
-  } else if(key==='grams'){
-    it.grams = value==='' ? 0 : num(value);
-  } else if(key==='price_override'){
-    if(value === null || value === '' || value === undefined){
-      it.price_override = null;
-    } else {
-      it.price_override = num(value);
-    }
-  } else if(key==='yield_pct'){
-    if(value==='' || value===null) it.yield_pct = 100;
-    else {
-      const v = num(value, 100);
-      it.yield_pct = Math.max(0, Math.min(100, v));
-    }
+  } else if(key==='quantity'){
+    it.quantity = value==='' ? 0 : num(value);
+  } else if(key==='unit'){
+    it.unit = value || 'g';
   }
   renderItems();
   recompute();
@@ -687,169 +614,52 @@ function recompute(){
   const r = getCurrent(); if(!r) return;
   writeBackForm(r);
   const c = calcRecipe(r);
-  toggleGyozaMode();
-  // 集計カード
-  document.getElementById('sum-per-cost').textContent = fmt(c.per_cost,0);
-  document.getElementById('sum-total-g').textContent = fmt(c.total_g,1);
-  document.getElementById('sum-item-count').textContent = r.items.length;
-  document.getElementById('sum-mass-g').textContent = fmt(c.mass_g,1);
-  const unlinked = c.rows.filter(x=>!x.ingredient).length;
-  const note = [`合計 ¥${fmt(c.per_cost,2)}`];
-  if(c.per_piece_cost) note.push(`1個あたり ¥${fmt(c.per_piece_cost,2)}`);
-  if(unlinked) note.push(`⚠ 未選択 ${unlinked}件`);
-  document.getElementById('sum-note').textContent = note.join(' / ');
-  // 仕込みスケール
-  const servings = num(document.getElementById('scale-servings').value, 1);
-  document.getElementById('scale-total-g').value = fmt(c.total_g*servings,1) + ' g';
-  document.getElementById('scale-total-cost').value = '¥'+fmt(c.per_cost*servings,0);
-  // 新UI: 原価詳細 / 販売価格シミュレーター / 仕込みロット / 餃子モード
+  renderBigKPI(r, c);
   renderCostDetail(r, c);
-  renderPriceSim(r, c);
-  renderLotCalc(r, c);
-  renderGyozaMode(r, c);
 }
 
-// #1 原価詳細: 材料別原価・構成比・ロス込み
-function renderCostDetail(r, c){
-  const wrap = document.getElementById('cost-detail-tbody');
-  if(!wrap) return;
-  if(!c.rows.length){
-    wrap.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center">材料がありません</td></tr>';
-  } else {
-    wrap.innerHTML = c.rows.map(x => {
-      const name = x.ingredient ? esc(x.ingredient.name) : '<span class="muted">(未選択)</span>';
-      return `<tr>
-        <td style="text-align:left">${name}</td>
-        <td>${fmt(x.g,1)}</td>
-        <td>${fmt(x.raw_g,1)}</td>
-        <td>${fmt(x.raw_with_loss,1)}</td>
-        <td>¥${fmt(x.cost,2)}</td>
-        <td>${fmt(x.cost_ratio*100,1)}%</td>
-      </tr>`;
-    }).join('');
-  }
-  const setText = (id, v) => { const el=document.getElementById(id); if(el) el.textContent = v; };
-  setText('cd-ing-cost', '¥'+fmt(c.ing_cost, 2));
-  setText('cd-ing-cost-loss', '¥'+fmt(c.ing_cost_with_loss, 2));
-  setText('cd-mass', fmt(c.mass_g,1)+' g');
-  setText('cd-mass-loss', fmt(c.mass_with_loss,1)+' g');
-  setText('cd-piece-cost', c.per_piece_cost!=null ? '¥'+fmt(c.per_piece_cost,2) : '–');
-  setText('cd-piece-count', c.pieces!=null ? fmt(c.pieces,0)+'個/人前' : '未指定');
-}
-
-// #2 販売価格シミュレーター (1皿原価ベース・店内提供)
-function renderPriceSim(r, c){
+function renderBigKPI(r, c){
+  const crClass = c.selling>0 ? costRateClass(c.cost_ratio) : 'muted';
   const setText = (id, v, cls) => { const el=document.getElementById(id); if(el){ el.textContent = v; if(cls!==undefined) el.className = cls; } };
-  // 材料原価と追加コストを分けて表示
-  setText('sim-material', '¥'+fmt(c.per_cost,1));
-  setText('sim-additional', '¥'+fmt(c.additional_cost,1));
-  setText('sim-plate-cost', '¥'+fmt(c.total_per_plate,1));
-  setText('sim-selling', c.selling>0?'¥'+fmt(c.selling,0):'未設定');
-  // 原価率色分け: 緑<25%, 黄 25-35%, 赤>35% (目標未達も考慮)
-  const crPct = c.cost_ratio*100;
-  const crClass = c.selling<=0 ? 'muted' : (c.over_target ? 'cr-high' : (crPct >= 25 ? 'cr-mid' : 'cr-low'));
-  setText('sim-cr', c.selling>0?fmt(crPct,1)+'%':'–', 'sim-val '+crClass);
-  setText('sim-margin', c.selling>0?'¥'+fmt(c.margin,1):'–', 'sim-val '+(c.margin<0?'cr-high':'accent'));
-  setText('sim-margin-ratio', c.selling>0?fmt(c.margin_ratio*100,1)+'%':'–');
-  setText('sim-sugg-by-ratio', c.suggested_price_by_ratio>0?'¥'+fmt(c.suggested_price_by_ratio,0):'–');
-  setText('sim-sugg-by-margin', c.suggested_price_by_margin>0?'¥'+fmt(c.suggested_price_by_margin,0):'–');
-  // プロミネント 1皿原価表示
+  // プロミネント 3大指標
   const plateBig = document.getElementById('plate-cost-big');
-  if(plateBig){
-    plateBig.textContent = '¥'+fmt(c.total_per_plate,0);
-    plateBig.className = 'plate-cost-big '+crClass;
-  }
+  if(plateBig){ plateBig.textContent = '¥'+fmt(c.per_plate_cost,0); plateBig.className = 'big-metric '+crClass; }
+  const crBig = document.getElementById('cr-big');
+  if(crBig){ crBig.textContent = c.selling>0 ? fmt(c.cost_ratio*100,1)+'%' : '–'; crBig.className = 'big-metric '+crClass; }
+  const marginBig = document.getElementById('margin-big');
+  if(marginBig){ marginBig.textContent = c.selling>0 ? '¥'+fmt(c.margin,0) : '–'; marginBig.className = 'big-metric '+(c.selling<=0?'muted':(c.margin<0?'cr-high':'accent')); }
+  // サブ: 1人前原価
+  setText('sub-per-serving', '¥'+fmt(c.per_serving_cost,1));
+  setText('sub-servings', fmt(c.servings,0));
+  setText('sub-margin-ratio', c.selling>0 ? fmt(c.margin_ratio*100,1)+'%' : '–');
+  setText('sub-selling', c.selling>0?'¥'+fmt(c.selling,0):'未設定');
+  setText('sub-suggested', c.suggested_price>0?'¥'+fmt(c.suggested_price,0):'–');
   const warnEl = document.getElementById('sim-warning');
   if(warnEl){
     if(c.over_target){
       warnEl.style.display = '';
-      warnEl.textContent = `⚠ 原価率が目標(${fmt(c.target_cost_ratio*100,1)}%)を超えています。推奨販売価格: ¥${fmt(c.suggested_price_by_ratio,0)}`;
+      warnEl.textContent = `⚠ 原価率が目標(${fmt(c.target_rate*100,1)}%)を超えています。推奨販売価格: ¥${fmt(c.suggested_price,0)}`;
     } else {
       warnEl.style.display = 'none';
     }
   }
 }
 
-// #5 仕込みロット計算 (仕入必要量リスト付き)
-function renderLotCalc(r, c){
-  const wrap = document.getElementById('lot-purchase-tbody');
+// 原価詳細: 材料別原価・構成比
+function renderCostDetail(r, c){
+  const wrap = document.getElementById('cost-detail-tbody');
   if(!wrap) return;
-  const servings = num(document.getElementById('scale-servings').value, 1);
-  const setText = (id, v) => { const el=document.getElementById(id); if(el) el.textContent = v; };
-  setText('lot-servings', fmt(servings,0));
-  setText('lot-mass-g', fmt(c.mass_g*servings,1)+' g');
-  setText('lot-mass-loss-g', fmt(c.mass_with_loss*servings,1)+' g');
-  setText('lot-cost', '¥'+fmt(c.per_cost*servings,0));
-  setText('lot-cost-loss', '¥'+fmt(c.per_cost_with_loss*servings,0));
   if(!c.rows.length){
-    wrap.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center">材料がありません</td></tr>';
-    return;
-  }
-  wrap.innerHTML = c.rows.map(x => {
-    const name = x.ingredient ? esc(x.ingredient.name) : '<span class="muted">(未選択)</span>';
-    return `<tr>
-      <td style="text-align:left">${name}</td>
-      <td>${fmt(x.g*servings,1)}</td>
-      <td>${fmt(x.raw_g*servings,1)}</td>
-      <td>${fmt(x.raw_with_loss*servings,1)}</td>
-    </tr>`;
-  }).join('');
-}
-
-// #6 餃子専用モード(店内提供向け)
-function renderGyozaMode(r, c){
-  const card = document.getElementById('gyoza-mode-card');
-  if(!card || card.style.display==='none') return;
-  const setText = (id, v) => { const el=document.getElementById(id); if(el) el.textContent = v; };
-  const pw = num(r.piece_weight_g, 17);
-  const sw = num(r.skin_weight_per_piece, 10);
-  const pieces = c.pieces || 5;
-  const anPerPiece = Math.max(0, pw - sw);
-  const skin_per_serving_g = sw * pieces;
-  const an_per_serving_g = anPerPiece * pieces;
-  const skinRow = c.rows.find(x => x.ingredient && x.ingredient.category === '皮');
-  const skin_price_per_piece = skinRow && skinRow.price ? sw * (skinRow.price/1000) : 0;
-  // 1個あたり内訳(餡・皮)
-  const an_cost_per_piece = pieces > 0 ? c.an_cost / pieces : 0;
-  const skin_cost_per_piece = pieces > 0 ? c.skin_cost / pieces : 0;
-  const food_cost_per_piece = an_cost_per_piece + skin_cost_per_piece;
-  setText('gz-pieces', fmt(pieces,0)+' 個/皿');
-  setText('gz-an-per-piece', fmt(anPerPiece,1)+' g');
-  setText('gz-skin-per-piece', fmt(sw,1)+' g');
-  setText('gz-skin-price-per-piece', '¥'+fmt(skin_price_per_piece,2));
-  setText('gz-an-total', fmt(an_per_serving_g,1)+' g');
-  setText('gz-skin-count', fmt(pieces,0)+' 枚');
-  // 原価内訳 (1皿基準)
-  setText('gz-an-cost', '¥'+fmt(c.an_cost,1));
-  setText('gz-skin-cost', '¥'+fmt(c.skin_cost,1));
-  setText('gz-oil-cost', '¥'+fmt(c.oil,1));
-  setText('gz-sauce-cost', '¥'+fmt(c.sauce,1));
-  setText('gz-additional', '¥'+fmt(c.additional_cost,1));
-  setText('gz-plate-cost', '¥'+fmt(c.total_per_plate,0));
-  setText('gz-selling', c.selling>0?'¥'+fmt(c.selling,0):'未設定');
-  setText('gz-margin', c.selling>0?'¥'+fmt(c.margin,0):'–');
-  setText('gz-cr', c.selling>0?fmt(c.cost_ratio*100,1)+'%':'–');
-  // 1個原価
-  setText('gz-cost-1', '¥'+fmt(food_cost_per_piece,2));
-  // 店内提供個数別 1皿原価比較 (食材原価×N個 + 油 + タレ + 追加コスト)
-  const platesWrap = document.getElementById('gz-serving-tbody');
-  if(platesWrap){
-    const servingSizes = [5, 6, 10];
-    const perPlateFixed = c.oil + c.sauce + c.labor_total + c.utility + c.other;
-    platesWrap.innerHTML = servingSizes.map(n => {
-      const food = food_cost_per_piece * n;
-      const plate = food + perPlateFixed;
-      const sell = c.selling;
-      const margin = sell - plate;
-      const cr = sell > 0 ? plate / sell : 0;
-      const crClass = sell <= 0 ? 'muted' : (cr > c.target_cost_ratio ? 'cr-high' : (cr*100 >= 25 ? 'cr-mid' : 'cr-low'));
+    wrap.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center">材料がありません</td></tr>';
+  } else {
+    wrap.innerHTML = c.rows.map(x => {
+      const name = x.ingredient ? esc(x.ingredient.name) : '<span class="muted">(未選択)</span>';
       return `<tr>
-        <td>${n}個提供</td>
-        <td>¥${fmt(food,1)}</td>
-        <td>¥${fmt(plate,1)}</td>
-        <td>${sell>0?'¥'+fmt(sell,0):'–'}</td>
-        <td>${sell>0?'¥'+fmt(margin,0):'–'}</td>
-        <td class="${crClass}">${sell>0?fmt(cr*100,1)+'%':'–'}</td>
+        <td style="text-align:left">${name}</td>
+        <td>${fmt(x.qty,1)} ${esc(x.unit||'g')}</td>
+        <td>${fmt(x.raw_qty,1)}</td>
+        <td>¥${fmt(x.cost,2)}</td>
+        <td>${fmt(x.cost_ratio_of_total*100,1)}%</td>
       </tr>`;
     }).join('');
   }
@@ -1047,53 +857,6 @@ function deleteIngredient(id){
   renderHero();
 }
 
-// ============ メモ機能(補助ツール) ============
-function calcScrap(){
-  const unit = num(document.getElementById('tool-scrap-unit').value,17);
-  const a = num(document.getElementById('tool-scrap-a').value,2650);
-  const total = num(document.getElementById('tool-scrap-total').value,15000);
-  const tb = document.getElementById('scrap-tbody');
-  const out = [1,2,3,4,5,6].map(m=>{
-    const scrap = 500*m;
-    const anRatio = a>0 ? (total-a)/a : 0;
-    const an = scrap*anRatio;
-    const count = (scrap+an)/unit;
-    return `<tr><td>${fmt(scrap,0)}</td><td>${fmt(an,0)}</td><td>${fmt(count,1)}</td></tr>`;
-  }).join('');
-  tb.innerHTML = out;
-}
-
-function calcDewater(){
-  const mode = document.getElementById('tool-dw-mode').value;
-  const ratio = num(document.getElementById('tool-dw-ratio').value,1.89);
-  const rows = document.querySelectorAll('#dw-tbody tr');
-  let sB=0,sA=0,s1=0,s2=0;
-  rows.forEach(tr=>{
-    const v = num(tr.querySelector('.dw-input').value);
-    let before,after;
-    if(mode==='before'){before=v;after=ratio>0?v/ratio:0;}
-    else{after=v;before=v*ratio;}
-    const _s1 = before*0.01, _s2 = before*0.02;
-    tr.querySelector('.dw-before').textContent=fmt(before,1);
-    tr.querySelector('.dw-after').textContent=fmt(after,1);
-    tr.querySelector('.dw-s1').textContent=fmt(_s1,2);
-    tr.querySelector('.dw-s2').textContent=fmt(_s2,2);
-    sB+=before;sA+=after;s1+=_s1;s2+=_s2;
-  });
-  document.getElementById('dw-sum-before').textContent=fmt(sB,1);
-  document.getElementById('dw-sum-after').textContent=fmt(sA,1);
-  document.getElementById('dw-sum-s1').textContent=fmt(s1,2);
-  document.getElementById('dw-sum-s2').textContent=fmt(s2,2);
-}
-
-function calcEmulsion(){
-  const veg = num(document.getElementById('emu-veg').value);
-  const e = num(document.getElementById('emu-ratio-e').value,58);
-  const v = num(document.getElementById('emu-ratio-v').value,42);
-  const out = v>0 ? (veg*e)/v : 0;
-  document.getElementById('emu-out').value = fmt(out,1)+' g';
-}
-
 // ============ 設定 ============
 function downloadBlob(blob, filename){
   const url = URL.createObjectURL(blob);
@@ -1137,20 +900,19 @@ function exportIngredientsCSV(){
 }
 
 function exportRecipesCSV(){
-  const header = ['recipe_id','recipe_name','category','per_serving_desc','selling_price','target_cost_ratio','target_margin','item_id','ingredient_name','grams','yield_pct','price_override','selected_category'];
+  const header = ['recipe_id','recipe_name','category','servings','selling_price','target_food_cost_rate','notes','item_id','ingredient_name','quantity','unit'];
   const lines = [csvLine(header)];
   state.recipes.forEach(r => {
     if(!r.items.length){
-      lines.push(csvLine([r.id,r.name,r.category,r.per_serving_desc||'',num(r.selling_price,0),num(r.target_cost_ratio,30),num(r.target_margin,0),'','','','','','']));
+      lines.push(csvLine([r.id,r.name,r.category||'',num(r.servings,1),num(r.selling_price,0),num(r.target_food_cost_rate,30),r.notes||'','','','','']));
       return;
     }
     r.items.forEach(it => {
       const ing = getIngredient(it.ingredient_id);
       lines.push(csvLine([
-        r.id, r.name, r.category, r.per_serving_desc||'',
-        num(r.selling_price,0), num(r.target_cost_ratio,30), num(r.target_margin,0),
-        it.id, ing?ing.name:'', num(it.grams,0).toFixed(3),
-        num(it.yield_pct,100), it.price_override??'', it.selected_category||'',
+        r.id, r.name, r.category||'', num(r.servings,1),
+        num(r.selling_price,0), num(r.target_food_cost_rate,30), r.notes||'',
+        it.id, ing?ing.name:'', num(it.quantity,0).toFixed(3), it.unit||'g',
       ]));
     });
   });
@@ -1159,25 +921,20 @@ function exportRecipesCSV(){
 }
 
 function exportCostResultsCSV(){
-  const header = ['recipe_id','recipe_name','category','per_serving_desc','pieces','per_cost','per_piece_cost','ing_cost_with_loss','mass_g','mass_with_loss','selling_price','cost_ratio_pct','margin','margin_ratio_pct','suggested_price_by_ratio','suggested_price_by_margin','target_cost_ratio_pct','over_target'];
+  const header = ['recipe_id','recipe_name','category','servings','per_plate_cost','per_serving_cost','selling_price','cost_ratio_pct','margin','margin_ratio_pct','suggested_price','target_rate_pct','over_target'];
   const lines = [csvLine(header)];
   state.recipes.forEach(r => {
     const c = calcRecipe(r);
     lines.push(csvLine([
-      r.id, r.name, r.category, r.per_serving_desc||'',
-      c.pieces||'',
-      num(c.per_cost,0).toFixed(2),
-      c.per_piece_cost!=null ? num(c.per_piece_cost,0).toFixed(2) : '',
-      num(c.ing_cost_with_loss,0).toFixed(2),
-      num(c.mass_g,0).toFixed(1),
-      num(c.mass_with_loss,0).toFixed(1),
+      r.id, r.name, r.category||'', num(c.servings,1),
+      num(c.per_plate_cost,0).toFixed(2),
+      num(c.per_serving_cost,0).toFixed(2),
       num(c.selling,0),
       num(c.cost_ratio*100,0).toFixed(1),
       num(c.margin,0).toFixed(2),
       num(c.margin_ratio*100,0).toFixed(1),
-      num(c.suggested_price_by_ratio,0).toFixed(0),
-      num(c.suggested_price_by_margin,0).toFixed(0),
-      num(c.target_cost_ratio*100,0).toFixed(1),
+      num(c.suggested_price,0).toFixed(0),
+      num(c.target_rate*100,0).toFixed(1),
       c.over_target?'true':'false',
     ]));
   });
@@ -1498,16 +1255,19 @@ function seedAll(){
   const ratio = per_serving_g / total_base;
   const items = recipeItems.map(ri => {
     const ing = byName[ri.name];
-    return makeItem({ingredient_id: ing?.id || null, grams: +(ri.base*ratio).toFixed(3), yield_pct: ri.yield_pct});
+    return makeItem({ingredient_id: ing?.id || null, quantity: +(ri.base*ratio).toFixed(3), unit: 'g', yield_pct: ri.yield_pct});
   });
   const skin = byName['餃子の皮 10cm'];
   const salt = byName['塩(水抜き用)'];
-  if(skin) items.push(makeItem({ingredient_id: skin.id, grams: 50, yield_pct: 100}));
-  if(salt) items.push(makeItem({ingredient_id: salt.id, grams: 1.15, yield_pct: 100}));
+  if(skin) items.push(makeItem({ingredient_id: skin.id, quantity: 50, unit: 'g'}));
+  if(salt) items.push(makeItem({ingredient_id: salt.id, quantity: 1.15, unit: 'g'}));
   const recipe = makeRecipe({
     name:'炭火焼鶏餃子',
-    category:'餃子',
-    per_serving_desc:'5個',
+    category:'中華',
+    servings: 1,
+    notes:'5個入り',
+    selling_price: 500,
+    target_food_cost_rate: 30,
     items,
   });
   state.recipes.push(recipe);
@@ -1521,7 +1281,6 @@ function init(){
   loadState();
   renderHero();
   renderRecipeList();
-  calcScrap(); calcDewater(); calcEmulsion();
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }

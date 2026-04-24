@@ -286,6 +286,37 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 @media (max-width: 600px) {
   .plate-cost-big { font-size: 28px; }
 }
+
+/* ===== v4 汎用原価管理: 3大KPI・色凡例 ===== */
+.kpi-big-card { background: linear-gradient(180deg, #ffffff 0%, #f3efe4 100%); padding: 16px; }
+.big-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.big-kpi { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 8px; text-align: center; }
+.big-kpi-label { font-size: 12px; color: var(--ink-sub); margin-bottom: 4px; }
+.big-metric { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+.big-metric.cr-low { color: #2d6a47; }
+.big-metric.cr-mid { color: #b8860b; }
+.big-metric.cr-high { color: var(--danger); }
+.big-metric.accent { color: var(--accent-2); }
+.big-metric.muted { color: var(--ink-sub); }
+.sub-kpi-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; padding: 8px 10px; background: #faf8f3; border-radius: 8px; font-size: 12px; color: var(--ink-sub); }
+.sub-kpi-row b { color: var(--ink); font-weight: 700; margin-left: 2px; }
+.color-legend { display: flex; gap: 14px; justify-content: center; margin-top: 10px; font-size: 11px; flex-wrap: wrap; }
+.full-width textarea { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; resize: vertical; font-family: inherit; }
+
+/* item row: qty + unit */
+.inline-field.qty input { width: 110px; font-size: 17px; font-weight: 700; }
+.inline-field.unit select { width: 70px; padding: 8px 8px; }
+
+/* recipe card CR badge (absolute color) */
+.rc-cr-badge.cr-low { background: #dcecd9; color: #2d6a47; }
+.rc-cr-badge.cr-mid { background: #faeec0; color: #856404; }
+.rc-cr-badge.cr-high { background: #fae0de; color: #9d3b2a; }
+.rc-cr-badge.muted { background: #ebe8df; color: var(--ink-sub); }
+
+@media (max-width: 600px) {
+  .big-metric { font-size: 22px; }
+  .big-kpi { padding: 10px 6px; }
+}
 .inline-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; }
 .inline-chip input { accent-color: var(--accent); }
 .item-row-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-sub); flex-wrap: wrap; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--line); }
