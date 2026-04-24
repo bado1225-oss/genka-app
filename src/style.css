@@ -125,3 +125,55 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
   .edit-title-input { font-size: 15px; }
   .main-segment-btn { font-size: 12.5px; }
 }
+
+/* ===== v2: 食材マスタ・レシピ新UI ===== */
+.empty-note.small { padding: 18px; font-size: 13px; }
+.full-width { grid-column: 1/-1; }
+
+/* 材料カード(レシピ編集) */
+#item-list { display: flex; flex-direction: column; gap: 8px; }
+.item-card { background: #faf8f3; border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.item-row-main { display: flex; gap: 8px; align-items: center; }
+.item-row-main select { flex: 1; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; min-width: 0; }
+.icon-del { background: transparent; border: 0; color: var(--danger); cursor: pointer; font-size: 18px; padding: 4px 8px; }
+.item-row-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.inline-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--ink-sub); }
+.inline-field input { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13px; width: 110px; text-align: right; }
+.inline-field.spot input { border-color: #e0b87a; background: #fffaf2; }
+.inline-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; }
+.inline-chip input { accent-color: var(--accent); }
+.item-row-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-sub); flex-wrap: wrap; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--line); }
+.item-cost { color: var(--ink); }
+.item-cost b { color: var(--accent-2); font-size: 14px; }
+.price-badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; font-weight: 700; margin-right: 4px; }
+
+/* 食材マスタ */
+.master-group { margin-top: 14px; }
+.master-group-title { font-weight: 700; color: var(--accent); font-size: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.group-count { font-size: 11px; color: var(--ink-sub); background: #ebe8df; padding: 1px 7px; border-radius: 10px; font-weight: 500; }
+.ing-row { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+.ing-row-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ing-name { font-weight: 600; color: var(--ink); }
+.ing-price { color: var(--accent-2); font-weight: 700; margin-left: auto; }
+.ing-row-meta { grid-column: 1; font-size: 11px; color: var(--ink-sub); display: flex; gap: 10px; }
+.ing-memo { color: var(--ink-sub); }
+.ing-used { color: var(--accent-2); }
+.ing-unused { color: var(--ink-sub); opacity: .7; }
+.ing-row-actions { grid-row: 1/3; grid-column: 2; display: flex; gap: 4px; }
+.ghost-btn.small, .danger-btn.small { padding: 6px 10px; font-size: 12px; }
+
+/* モーダル */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(31,42,36,.45); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 12px; }
+.modal-card { background: #fff; border-radius: 14px; padding: 16px; max-width: 520px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,.25); max-height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.modal-title { font-weight: 700; color: var(--accent); font-size: 16px; }
+.modal-card .grid-2 label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-sub); }
+.modal-card input, .modal-card select { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; color: var(--ink); }
+.modal-card .save-row { margin-top: 14px; justify-content: flex-end; }
+
+@media (max-width: 600px) {
+  .ing-row { grid-template-columns: 1fr; }
+  .ing-row-actions { grid-row: auto; grid-column: 1; justify-content: flex-end; }
+  .ing-price { margin-left: 0; }
+  .inline-field input { width: 90px; }
+}

@@ -11,12 +11,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424a">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424a">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424a">
-<link rel="manifest" href="manifest.webmanifest?v=20260424a">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424b">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424b">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424b">
+<link rel="manifest" href="manifest.webmanifest?v=20260424b">
 <title>原価計算アプリ</title>
-<link rel="stylesheet" href="src/style.css?v=20260424a">
+<link rel="stylesheet" href="src/style.css?v=20260424b">
 </head>
 <body>
 <div class="app">
@@ -24,9 +24,10 @@
     <div class="header-top">
       <div class="header-title-wrap">
         <h1>原価計算</h1>
-        <div class="header-sub" id="header-sub">メニュー別 原価シミュレーター</div>
+        <div class="header-sub">メニュー別 1人前原価シミュレーター</div>
       </div>
       <div class="header-actions">
+        <button class="header-icon-btn" onclick="showTab('master')" aria-label="食材マスタ" title="食材マスタ">🥬</button>
         <button class="header-icon-btn" onclick="showTab('tools')" aria-label="補助ツール" title="補助ツール">🧮</button>
         <button class="header-icon-btn" onclick="showTab('settings')" aria-label="設定" title="設定">⚙️</button>
       </div>
@@ -36,9 +37,7 @@
   <div class="dashboard">
     <div class="hero-card">
       <div class="hero-top">
-        <div>
-          <div class="hero-title" id="hero-title">メニュー一覧</div>
-        </div>
+        <div class="hero-title" id="hero-title">ダッシュボード</div>
         <div class="hero-stamp" id="hero-stamp">–</div>
       </div>
       <div class="kpi-grid" id="dashboard-kpis"></div>
@@ -47,16 +46,18 @@
 
   <div class="main-segment-tabs">
     <button class="main-segment-btn active" id="seg-recipes" onclick="showTab('recipes')"><span class="seg-icon">📋</span>レシピ</button>
+    <button class="main-segment-btn" id="seg-master" onclick="showTab('master')"><span class="seg-icon">🥬</span>食材</button>
     <button class="main-segment-btn" id="seg-tools" onclick="showTab('tools')"><span class="seg-icon">🧮</span>補助</button>
     <button class="main-segment-btn" id="seg-settings" onclick="showTab('settings')"><span class="seg-icon">⚙️</span>設定</button>
   </div>
 
   <div class="view-wrap">
-    <!-- レシピ一覧 / 編集 -->
+
+    <!-- ============== レシピ ============== -->
     <div id="view-recipes">
       <div id="recipe-list-pane">
         <div class="toolbar-row">
-          <select id="filter-category" class="toolbar-select" onchange="renderRecipeList()">
+          <select id="filter-recipe-category" class="toolbar-select" onchange="renderRecipeList()">
             <option value="all">カテゴリ: すべて</option>
           </select>
           <input id="search-recipe" class="search-input" placeholder="レシピ名で検索" oninput="renderRecipeList()">
@@ -72,75 +73,68 @@
         <div class="edit-header">
           <button class="back-btn" onclick="backToList()">← 一覧</button>
           <div class="edit-title-wrap">
-            <input id="edit-name" class="edit-title-input" placeholder="レシピ名">
+            <input id="edit-name" class="edit-title-input" placeholder="レシピ名" oninput="recompute()">
             <div class="edit-sub">
-              <select id="edit-category" class="inline-select">
+              <select id="edit-category" class="inline-select" onchange="recompute()">
                 <option value="餃子">餃子</option>
                 <option value="焼売">焼売</option>
                 <option value="ラーメン">ラーメン</option>
                 <option value="サイド">サイド</option>
+                <option value="メイン">メイン</option>
                 <option value="その他">その他</option>
               </select>
+              <input id="edit-serving-desc" class="inline-select" placeholder="1人前の説明(例: 5個)" oninput="recompute()">
             </div>
           </div>
           <button class="danger-btn" onclick="deleteCurrent()">削除</button>
         </div>
 
         <div class="section-card">
-          <div class="section-title">基本設定</div>
-          <div class="grid-2">
-            <label>1個あたり重量(g)<input type="number" id="edit-unit-weight" step="0.1" min="0" oninput="recompute()"></label>
-            <label>仕込み個数(個)<input type="number" id="edit-quantity" step="1" min="0" oninput="recompute()"></label>
-            <label>皮を使う<select id="edit-use-skin" onchange="toggleSkin();recompute()"><option value="1">はい</option><option value="0">いいえ</option></select></label>
-            <label>野菜 塩水抜き係数(%)<input type="number" id="edit-salt-ratio" step="0.1" value="2" oninput="recompute()" title="キャベツ・玉ねぎ・ニラなど脱水フラグが立つ材料の重量に掛ける塩％"></label>
+          <div class="section-title">材料(1人前あたり)</div>
+          <div id="item-list"></div>
+          <div class="action-row">
+            <button class="ghost-btn" onclick="addItem()">＋ 材料追加</button>
+            <button class="ghost-btn" onclick="showTab('master')">🥬 食材マスタへ</button>
           </div>
         </div>
 
         <div class="section-card">
-          <div class="section-title">材料</div>
-          <div class="ing-table-wrap">
-            <table class="ing-table" id="ing-table">
-              <thead>
-                <tr>
-                  <th class="col-name">材料名</th>
-                  <th class="col-g">基準g</th>
-                  <th class="col-scaled">仕込g</th>
-                  <th class="col-price">kg単価</th>
-                  <th class="col-cost">原価</th>
-                  <th class="col-per">1個</th>
-                  <th class="col-ratio">比率</th>
-                  <th class="col-x2" title="野菜で水抜き前後で2倍扱いにする場合">×2</th>
-                  <th class="col-dewater" title="塩水抜き対象(キャベツ/玉ねぎ/ニラ等)">脱水</th>
-                  <th class="col-del"></th>
-                </tr>
-              </thead>
-              <tbody id="ing-tbody"></tbody>
-              <tfoot id="ing-tfoot"></tfoot>
-            </table>
+          <div class="section-title">塩(水抜き用・自動計算)</div>
+          <div class="grid-3">
+            <label>自動計上<select id="edit-auto-salt" onchange="recompute()"><option value="1">する</option><option value="0">しない</option></select></label>
+            <label>塩食材<select id="edit-salt-ing" onchange="recompute()"></select></label>
+            <label>塩 対脱水野菜比率(%)<input type="number" id="edit-salt-ratio" step="0.1" value="2" oninput="recompute()"></label>
           </div>
-          <div class="action-row">
-            <button class="ghost-btn" onclick="addIngredient()">＋ 材料追加</button>
-          </div>
+          <div class="muted-note">「脱水」にチェックした野菜の1人前gに対して、2倍量×この%を塩として自動計上します。</div>
         </div>
 
-        <div class="section-card" id="skin-card">
-          <div class="section-title">皮</div>
+        <div class="section-card">
+          <div class="section-title">皮(任意)</div>
           <div class="grid-3">
-            <label>1個あたり皮重量(g)<input type="number" id="edit-skin-g" step="0.1" oninput="recompute()"></label>
-            <label>皮 kg単価(円)<input type="number" id="edit-skin-price" step="1" oninput="recompute()"></label>
-            <label class="readonly"><span>皮 1個あたり(円)</span><output id="edit-skin-per"></output></label>
+            <label>皮を使う<select id="edit-skin-enabled" onchange="toggleSkin();recompute()"><option value="1">はい</option><option value="0">いいえ</option></select></label>
+            <label id="skin-ing-wrap">皮食材<select id="edit-skin-ing" onchange="recompute()"></select></label>
+            <label id="skin-g-wrap">1人前 皮g<input type="number" id="edit-skin-g" step="0.1" oninput="recompute()"></label>
           </div>
         </div>
 
         <div class="section-card summary-card">
           <div class="section-title">集計</div>
           <div class="summary-grid">
-            <div class="summary-item"><div class="s-label">仕込み総重量</div><div class="s-value"><span id="sum-total-g">0</span> g</div></div>
-            <div class="summary-item"><div class="s-label">出来上がり個数</div><div class="s-value"><span id="sum-quantity">0</span> 個</div></div>
-            <div class="summary-item accent"><div class="s-label">総原価</div><div class="s-value"><span id="sum-total-cost">0</span> 円</div></div>
-            <div class="summary-item accent"><div class="s-label">1個あたり原価</div><div class="s-value"><span id="sum-per-cost">0</span> 円</div></div>
+            <div class="summary-item accent"><div class="s-label">1人前 原価</div><div class="s-value"><span id="sum-per-cost">0</span> 円</div></div>
+            <div class="summary-item"><div class="s-label">1人前 総重量</div><div class="s-value"><span id="sum-total-g">0</span> g</div></div>
+            <div class="summary-item"><div class="s-label">材料費</div><div class="s-value">¥<span id="sum-ing-cost">0</span></div></div>
+            <div class="summary-item"><div class="s-label">塩+皮</div><div class="s-value">¥<span id="sum-extra-cost">0</span></div></div>
           </div>
           <div class="summary-note" id="sum-note"></div>
+        </div>
+
+        <div class="section-card">
+          <div class="section-title">仕込みスケール</div>
+          <div class="grid-3">
+            <label>仕込む人前数<input type="number" id="scale-servings" step="1" value="1" oninput="recompute()"></label>
+            <label class="readonly"><span>仕込み総重量</span><output id="scale-total-g">0 g</output></label>
+            <label class="readonly"><span>仕込み総原価</span><output id="scale-total-cost">¥0</output></label>
+          </div>
         </div>
 
         <div class="action-row save-row">
@@ -150,14 +144,45 @@
       </div>
     </div>
 
-    <!-- 補助ツール -->
+    <!-- ============== 食材マスタ ============== -->
+    <div id="view-master" style="display:none;">
+      <div class="section-card">
+        <div class="section-title">食材マスタ(価格台帳)</div>
+        <div class="toolbar-row">
+          <select id="filter-master-category" class="toolbar-select" onchange="renderMaster()">
+            <option value="all">カテゴリ: すべて</option>
+            <option value="肉">肉</option>
+            <option value="魚">魚</option>
+            <option value="野菜">野菜</option>
+            <option value="調味料">調味料</option>
+            <option value="皮">皮</option>
+            <option value="その他">その他</option>
+          </select>
+          <select id="filter-master-type" class="toolbar-select" onchange="renderMaster()">
+            <option value="all">価格種別: すべて</option>
+            <option value="market">市場価格</option>
+            <option value="purchase">仕入れ価格</option>
+            <option value="spot">都度入力</option>
+          </select>
+          <input id="search-master" class="search-input" placeholder="食材名で検索" oninput="renderMaster()">
+        </div>
+        <div class="action-row">
+          <button class="primary-btn" onclick="addIngredient()">＋ 食材を追加</button>
+          <button class="ghost-btn" onclick="seedMaster()">🌱 サンプル食材一括追加(餃子一式)</button>
+        </div>
+        <div class="muted-note">🟢 市場価格(週次等で更新) / 🔵 仕入れ価格(安定) / 🟠 都度入力(魚など変動大)</div>
+        <div id="master-list"></div>
+      </div>
+    </div>
+
+    <!-- ============== 補助ツール ============== -->
     <div id="view-tools" style="display:none;">
       <div class="section-card">
         <div class="section-title">端材換算(炭火焼端材 → 必要餡量・餃子個数)</div>
         <div class="grid-3">
           <label>1個あたり重量(g)<input type="number" id="tool-scrap-unit" value="17" step="0.1" oninput="calcScrap()"></label>
-          <label>炭火焼:餡 比率(炭火焼)<input type="number" id="tool-scrap-a" value="2650" step="1" oninput="calcScrap()"></label>
-          <label>炭火焼:餡 比率(餡合計)<input type="number" id="tool-scrap-total" value="15120" step="1" oninput="calcScrap()" title="炭火焼以外の材料合計（基準g）"></label>
+          <label>炭火焼(g)<input type="number" id="tool-scrap-a" value="2650" step="1" oninput="calcScrap()"></label>
+          <label>材料合計(g)<input type="number" id="tool-scrap-total" value="15000" step="1" oninput="calcScrap()" title="炭火焼含む全材料の基準g合計"></label>
         </div>
         <table class="scrap-table" id="scrap-table">
           <thead><tr><th>炭火焼(g)</th><th>必要餡(g)</th><th>餃子(個)</th></tr></thead>
@@ -202,7 +227,6 @@
             <tr><td>8.0cm</td><td>0.6mm</td><td>4.0g</td><td>2.59円</td></tr>
           </tbody>
         </table>
-        <div class="muted-note">最低発注: 10cm 40枚×35袋=1400枚 8089円 / 8.0cm 50枚×60袋=3000枚</div>
       </div>
 
       <div class="section-card">
@@ -213,11 +237,10 @@
           <label>野菜比率(%)<input type="number" id="emu-ratio-v" value="42" step="0.1" oninput="calcEmulsion()"></label>
           <label class="readonly"><span>必要エマルジョン(g)</span><output id="emu-out"></output></label>
         </div>
-        <div class="muted-note">氷(冷却):スープ 参考比率 40%:60%</div>
       </div>
     </div>
 
-    <!-- 設定 -->
+    <!-- ============== 設定 ============== -->
     <div id="view-settings" style="display:none;">
       <div class="section-card">
         <div class="section-title">データ</div>
@@ -225,21 +248,61 @@
           <button class="ghost-btn" onclick="exportAll()">📤 全データ書き出し(JSON)</button>
           <label class="ghost-btn file-btn">📥 読み込み(JSON)<input type="file" accept="application/json" onchange="importAll(event)" hidden></label>
         </div>
-        <div class="muted-note">ブラウザのlocalStorageに保存されます。機種変更・ブラウザ変更時は書き出してご利用ください。</div>
+        <div class="muted-note">食材マスタとレシピをまとめてバックアップできます。</div>
       </div>
       <div class="section-card">
-        <div class="section-title">サンプル</div>
+        <div class="section-title">サンプル投入</div>
         <div class="action-row">
-          <button class="ghost-btn" onclick="seedGyoza()">炭火焼鶏餃子 を追加</button>
+          <button class="primary-btn" onclick="seedAll()">🌱 炭火焼鶏餃子 一式(食材+レシピ)</button>
+        </div>
+        <div class="muted-note">食材マスタ(17件)と炭火焼鶏餃子レシピを追加します。</div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">全削除</div>
+        <div class="action-row">
+          <button class="danger-btn" onclick="resetAll()">🗑 全データをリセット</button>
         </div>
       </div>
       <div class="section-card">
         <div class="section-title">このアプリについて</div>
-        <div class="muted-note">原価計算アプリ v1.0.0 / 静的PWA / データはこの端末に保存</div>
+        <div class="muted-note">原価計算アプリ v2.0.0 / 静的PWA / データはこの端末に保存</div>
       </div>
     </div>
   </div>
 </div>
-<script src="src/main.js?v=20260424a"></script>
+
+<!-- 食材編集モーダル -->
+<div id="ing-modal" class="modal-backdrop" style="display:none;" onclick="closeIngModalBg(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="ing-modal-title">食材を追加</div>
+      <button class="back-btn" onclick="closeIngModal()">✕</button>
+    </div>
+    <div class="grid-2">
+      <label>食材名<input type="text" id="ing-name" placeholder="例: キャベツ"></label>
+      <label>カテゴリ<select id="ing-category">
+        <option value="肉">肉</option>
+        <option value="魚">魚</option>
+        <option value="野菜">野菜</option>
+        <option value="調味料">調味料</option>
+        <option value="皮">皮</option>
+        <option value="その他">その他</option>
+      </select></label>
+      <label>価格種別<select id="ing-type">
+        <option value="market">🟢 市場価格(野菜等)</option>
+        <option value="purchase">🔵 仕入れ価格(安定)</option>
+        <option value="spot">🟠 都度入力(魚等)</option>
+      </select></label>
+      <label>kg単価(円)<input type="number" id="ing-price" step="1" placeholder="都度入力の場合は空欄可"></label>
+      <label class="full-width">メモ<input type="text" id="ing-memo" placeholder="(任意)"></label>
+    </div>
+    <div class="action-row save-row">
+      <button class="ghost-btn" onclick="closeIngModal()">キャンセル</button>
+      <button class="primary-btn" onclick="saveIngModal()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="src/main.js?v=20260424b"></script>
 </body>
 </html>
