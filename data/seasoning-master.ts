@@ -1,0 +1,72 @@
+/**
+ * 調味料マスター
+ * 飲食店・食品製造向け 原価計算の基準単価
+ *
+ * 野菜マスター(vegetable-master.ts)と同じ IngredientMasterItem スキーマを共有する統合設計。
+ * kg商品(固形・粉末・ペースト)は purchase_unit='kg' / 液体商品は purchase_unit='L'
+ * standard_price_per_kg_or_l: kg/L いずれかの基準単価
+ * price_per_g_or_ml:         g/ml いずれかの単位価格 = standard/1000
+ */
+
+export type SeasoningCategory =
+  | '基本調味料'
+  | '和風調味料'
+  | '洋風調味料'
+  | '中華調味料'
+  | '油脂'
+  | '甘味料'
+  | '発酵調味料'
+  | 'その他';
+
+/** 原価計算用 食材マスタの共通スキーマ (野菜/肉/魚/調味料で共通) */
+export interface IngredientMasterItem<TCategory extends string = string> {
+  id: string;
+  item_name: string;
+  category: TCategory;
+  purchase_unit: 'kg' | 'L' | string;
+  standard_price_per_kg_or_l: number;
+  price_per_g_or_ml: number;
+  yield_rate: number;
+  practical_price_1_2x: number;
+  practical_price_1_5x: number;
+  memo: string;
+}
+
+export type SeasoningMasterItem = IngredientMasterItem<SeasoningCategory>;
+
+export const seasoningMaster: SeasoningMasterItem[] = [
+  { id: 'S001', item_name: '食塩',             category: '基本調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 120,  price_per_g_or_ml: 0.120, yield_rate: 1.00, practical_price_1_2x: 144,    practical_price_1_5x: 180,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S002', item_name: '上白糖',           category: '甘味料',     purchase_unit: 'kg', standard_price_per_kg_or_l: 250,  price_per_g_or_ml: 0.250, yield_rate: 1.00, practical_price_1_2x: 300,    practical_price_1_5x: 375,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S003', item_name: 'グラニュー糖',     category: '甘味料',     purchase_unit: 'kg', standard_price_per_kg_or_l: 280,  price_per_g_or_ml: 0.280, yield_rate: 1.00, practical_price_1_2x: 336,    practical_price_1_5x: 420,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S004', item_name: '三温糖',           category: '甘味料',     purchase_unit: 'kg', standard_price_per_kg_or_l: 300,  price_per_g_or_ml: 0.300, yield_rate: 1.00, practical_price_1_2x: 360,    practical_price_1_5x: 450,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S005', item_name: '濃口醤油',         category: '和風調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 300,  price_per_g_or_ml: 0.300, yield_rate: 1.00, practical_price_1_2x: 360,    practical_price_1_5x: 450,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S006', item_name: '薄口醤油',         category: '和風調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 320,  price_per_g_or_ml: 0.320, yield_rate: 1.00, practical_price_1_2x: 384,    practical_price_1_5x: 480,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S007', item_name: 'みりん',           category: '和風調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 400,  price_per_g_or_ml: 0.400, yield_rate: 1.00, practical_price_1_2x: 480,    practical_price_1_5x: 600,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S008', item_name: '料理酒',           category: '和風調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 300,  price_per_g_or_ml: 0.300, yield_rate: 1.00, practical_price_1_2x: 360,    practical_price_1_5x: 450,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S009', item_name: '穀物酢',           category: '基本調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 250,  price_per_g_or_ml: 0.250, yield_rate: 1.00, practical_price_1_2x: 300,    practical_price_1_5x: 375,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S010', item_name: '米酢',             category: '基本調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 400,  price_per_g_or_ml: 0.400, yield_rate: 1.00, practical_price_1_2x: 480,    practical_price_1_5x: 600,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S011', item_name: '味噌(赤)',         category: '発酵調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 500,  price_per_g_or_ml: 0.500, yield_rate: 0.98, practical_price_1_2x: 600,    practical_price_1_5x: 750,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S012', item_name: '味噌(白)',         category: '発酵調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 550,  price_per_g_or_ml: 0.550, yield_rate: 0.98, practical_price_1_2x: 660,    practical_price_1_5x: 825,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S013', item_name: '味噌(合わせ)',     category: '発酵調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 520,  price_per_g_or_ml: 0.520, yield_rate: 0.98, practical_price_1_2x: 624,    practical_price_1_5x: 780,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S014', item_name: 'サラダ油',         category: '油脂',       purchase_unit: 'L',  standard_price_per_kg_or_l: 300,  price_per_g_or_ml: 0.300, yield_rate: 1.00, practical_price_1_2x: 360,    practical_price_1_5x: 450,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S015', item_name: 'ごま油',           category: '油脂',       purchase_unit: 'L',  standard_price_per_kg_or_l: 800,  price_per_g_or_ml: 0.800, yield_rate: 1.00, practical_price_1_2x: 960,    practical_price_1_5x: 1200,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S016', item_name: 'オリーブオイル',   category: '油脂',       purchase_unit: 'L',  standard_price_per_kg_or_l: 1200, price_per_g_or_ml: 1.200, yield_rate: 1.00, practical_price_1_2x: 1440,   practical_price_1_5x: 1800,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S017', item_name: 'バター',           category: '油脂',       purchase_unit: 'kg', standard_price_per_kg_or_l: 1200, price_per_g_or_ml: 1.200, yield_rate: 0.95, practical_price_1_2x: 1440,   practical_price_1_5x: 1800,   memo: '業務用平均価格 / ロスあり / 仕入れで変動あり' },
+  { id: 'S018', item_name: 'マーガリン',       category: '油脂',       purchase_unit: 'kg', standard_price_per_kg_or_l: 600,  price_per_g_or_ml: 0.600, yield_rate: 0.95, practical_price_1_2x: 720,    practical_price_1_5x: 900,    memo: '業務用平均価格 / ロスあり / 仕入れで変動あり' },
+  { id: 'S019', item_name: 'マヨネーズ',       category: '洋風調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 500,  price_per_g_or_ml: 0.500, yield_rate: 0.98, practical_price_1_2x: 600,    practical_price_1_5x: 750,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S020', item_name: 'ケチャップ',       category: '洋風調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 400,  price_per_g_or_ml: 0.400, yield_rate: 0.98, practical_price_1_2x: 480,    practical_price_1_5x: 600,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S021', item_name: 'ウスターソース',   category: '洋風調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 350,  price_per_g_or_ml: 0.350, yield_rate: 1.00, practical_price_1_2x: 420,    practical_price_1_5x: 525,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S022', item_name: '中濃ソース',       category: '洋風調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 350,  price_per_g_or_ml: 0.350, yield_rate: 1.00, practical_price_1_2x: 420,    practical_price_1_5x: 525,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S023', item_name: 'めんつゆ',         category: '和風調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 400,  price_per_g_or_ml: 0.400, yield_rate: 1.00, practical_price_1_2x: 480,    practical_price_1_5x: 600,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S024', item_name: '白だし',           category: '和風調味料', purchase_unit: 'L',  standard_price_per_kg_or_l: 500,  price_per_g_or_ml: 0.500, yield_rate: 1.00, practical_price_1_2x: 600,    practical_price_1_5x: 750,    memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S025', item_name: '鶏ガラスープの素', category: '中華調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 1000, price_per_g_or_ml: 1.000, yield_rate: 1.00, practical_price_1_2x: 1200,   practical_price_1_5x: 1500,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S026', item_name: 'コンソメ',         category: '洋風調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 1200, price_per_g_or_ml: 1.200, yield_rate: 1.00, practical_price_1_2x: 1440,   practical_price_1_5x: 1800,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S027', item_name: '豆板醤',           category: '中華調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 900,  price_per_g_or_ml: 0.900, yield_rate: 0.98, practical_price_1_2x: 1080,   practical_price_1_5x: 1350,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S028', item_name: '甜麺醤',           category: '中華調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 900,  price_per_g_or_ml: 0.900, yield_rate: 0.98, practical_price_1_2x: 1080,   practical_price_1_5x: 1350,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S029', item_name: 'コチュジャン',     category: '中華調味料', purchase_unit: 'kg', standard_price_per_kg_or_l: 700,  price_per_g_or_ml: 0.700, yield_rate: 0.98, practical_price_1_2x: 840,    practical_price_1_5x: 1050,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S030', item_name: 'にんにくチューブ', category: 'その他',     purchase_unit: 'kg', standard_price_per_kg_or_l: 800,  price_per_g_or_ml: 0.800, yield_rate: 0.98, practical_price_1_2x: 960,    practical_price_1_5x: 1200,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S031', item_name: 'しょうがチューブ', category: 'その他',     purchase_unit: 'kg', standard_price_per_kg_or_l: 800,  price_per_g_or_ml: 0.800, yield_rate: 0.98, practical_price_1_2x: 960,    practical_price_1_5x: 1200,   memo: '業務用平均価格 / 仕入れで変動あり' },
+  { id: 'S032', item_name: 'はちみつ',         category: '甘味料',     purchase_unit: 'kg', standard_price_per_kg_or_l: 1200, price_per_g_or_ml: 1.200, yield_rate: 0.98, practical_price_1_2x: 1440,   practical_price_1_5x: 1800,   memo: '業務用平均価格 / 仕入れで変動あり' },
+];
+
+export default seasoningMaster;

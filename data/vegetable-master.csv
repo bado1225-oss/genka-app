@@ -1,4 +1,4 @@
-id,item_name,category,purchase_unit,standard_price_per_kg,price_per_g,yield_rate,practical_price_per_kg_1_2x,practical_price_per_kg_1_5x,memo
+id,item_name,category,purchase_unit,standard_price_per_kg_or_l,price_per_g_or_ml,yield_rate,practical_price_1_2x,practical_price_1_5x,memo
 V001,キャベツ,葉物,kg,92.000,0.092,0.85,110.400,138.000,市場価格ベース / 実仕入価格は店舗ごとに調整
 V002,はくさい,葉物,kg,56.000,0.056,0.85,67.200,84.000,市場価格ベース / 実仕入価格は店舗ごとに調整
 V003,だいこん,根菜,kg,74.000,0.074,0.90,88.800,111.000,市場価格ベース / 実仕入価格は店舗ごとに調整

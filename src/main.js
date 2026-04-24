@@ -313,13 +313,14 @@ function buildIngredientOptions(){
   const groups = {};
   INGREDIENT_CATS.forEach(c=>groups[c]=[]);
   state.ingredients.forEach(i => (groups[i.category]||groups['その他']).push(i));
+  // 各グループ内は名前順にソート
+  Object.values(groups).forEach(arr => arr.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ja')));
   let html = '';
   INGREDIENT_CATS.forEach(c=>{
     if(!groups[c].length) return;
     html += `<optgroup label="${c}">`;
     groups[c].forEach(i=>{
-      const t = PRICE_TYPES[i.price_type]||{};
-      html += `<option value="${i.id}">${esc(i.name)} [${t.short||''}¥${fmt(i.kg_price,0)}/kg]</option>`;
+      html += `<option value="${i.id}">${esc(i.name)}</option>`;
     });
     html += `</optgroup>`;
   });
@@ -752,6 +753,60 @@ function seedVegetables(){
   saveState();
   renderMaster(); renderHero();
   alert(`野菜マスター: ${added}件 追加 / ${skipped}件 既存スキップ`);
+}
+
+// ============ 調味料マスター(32件) 一括取り込み ============
+const SEASONING_MASTER = [
+  {id:'S001',name:'食塩',             sub:'基本調味料', unit:'kg', price:120,  yield:1.00},
+  {id:'S002',name:'上白糖',           sub:'甘味料',    unit:'kg', price:250,  yield:1.00},
+  {id:'S003',name:'グラニュー糖',     sub:'甘味料',    unit:'kg', price:280,  yield:1.00},
+  {id:'S004',name:'三温糖',           sub:'甘味料',    unit:'kg', price:300,  yield:1.00},
+  {id:'S005',name:'濃口醤油',         sub:'和風調味料',unit:'L',  price:300,  yield:1.00},
+  {id:'S006',name:'薄口醤油',         sub:'和風調味料',unit:'L',  price:320,  yield:1.00},
+  {id:'S007',name:'みりん',           sub:'和風調味料',unit:'L',  price:400,  yield:1.00},
+  {id:'S008',name:'料理酒',           sub:'和風調味料',unit:'L',  price:300,  yield:1.00},
+  {id:'S009',name:'穀物酢',           sub:'基本調味料',unit:'L',  price:250,  yield:1.00},
+  {id:'S010',name:'米酢',             sub:'基本調味料',unit:'L',  price:400,  yield:1.00},
+  {id:'S011',name:'味噌(赤)',         sub:'発酵調味料',unit:'kg', price:500,  yield:0.98},
+  {id:'S012',name:'味噌(白)',         sub:'発酵調味料',unit:'kg', price:550,  yield:0.98},
+  {id:'S013',name:'味噌(合わせ)',     sub:'発酵調味料',unit:'kg', price:520,  yield:0.98},
+  {id:'S014',name:'サラダ油',         sub:'油脂',      unit:'L',  price:300,  yield:1.00},
+  {id:'S015',name:'ごま油',           sub:'油脂',      unit:'L',  price:800,  yield:1.00},
+  {id:'S016',name:'オリーブオイル',   sub:'油脂',      unit:'L',  price:1200, yield:1.00},
+  {id:'S017',name:'バター',           sub:'油脂',      unit:'kg', price:1200, yield:0.95},
+  {id:'S018',name:'マーガリン',       sub:'油脂',      unit:'kg', price:600,  yield:0.95},
+  {id:'S019',name:'マヨネーズ',       sub:'洋風調味料',unit:'kg', price:500,  yield:0.98},
+  {id:'S020',name:'ケチャップ',       sub:'洋風調味料',unit:'kg', price:400,  yield:0.98},
+  {id:'S021',name:'ウスターソース',   sub:'洋風調味料',unit:'L',  price:350,  yield:1.00},
+  {id:'S022',name:'中濃ソース',       sub:'洋風調味料',unit:'L',  price:350,  yield:1.00},
+  {id:'S023',name:'めんつゆ',         sub:'和風調味料',unit:'L',  price:400,  yield:1.00},
+  {id:'S024',name:'白だし',           sub:'和風調味料',unit:'L',  price:500,  yield:1.00},
+  {id:'S025',name:'鶏ガラスープの素', sub:'中華調味料',unit:'kg', price:1000, yield:1.00},
+  {id:'S026',name:'コンソメ',         sub:'洋風調味料',unit:'kg', price:1200, yield:1.00},
+  {id:'S027',name:'豆板醤',           sub:'中華調味料',unit:'kg', price:900,  yield:0.98},
+  {id:'S028',name:'甜麺醤',           sub:'中華調味料',unit:'kg', price:900,  yield:0.98},
+  {id:'S029',name:'コチュジャン',     sub:'中華調味料',unit:'kg', price:700,  yield:0.98},
+  {id:'S030',name:'にんにくチューブ', sub:'その他',    unit:'kg', price:800,  yield:0.98},
+  {id:'S031',name:'しょうがチューブ', sub:'その他',    unit:'kg', price:800,  yield:0.98},
+  {id:'S032',name:'はちみつ',         sub:'甘味料',    unit:'kg', price:1200, yield:0.98},
+];
+
+function seedSeasonings(){
+  let added = 0, skipped = 0;
+  SEASONING_MASTER.forEach(v => {
+    if(state.ingredients.some(i=>i.name===v.name)){ skipped++; return; }
+    state.ingredients.push(makeIngredient({
+      name: v.name,
+      category: '調味料',
+      price_type: 'purchase',
+      kg_price: v.price,
+      memo: `[${v.id}] ${v.sub} / 単位${v.unit} / 歩留${Math.round(v.yield*100)}% / 業務用平均価格`,
+    }));
+    added++;
+  });
+  saveState();
+  renderMaster(); renderHero();
+  alert(`調味料マスター: ${added}件 追加 / ${skipped}件 既存スキップ`);
 }
 
 function seedAll(){
