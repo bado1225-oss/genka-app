@@ -264,6 +264,28 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
   .sim-val { font-size: 14px; }
   .gyoza-grid > div b { font-size: 13px; }
 }
+
+/* ===== v3.1 店内提供特化: 1皿原価大きく表示・原価率色分け ===== */
+.plate-cost-banner { background: linear-gradient(180deg, #f7f5ee 0%, #eee9dc 100%); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; text-align: center; }
+.plate-cost-banner .s-label { font-size: 12px; color: var(--ink-sub); }
+.plate-cost-big { font-size: 34px; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; margin: 4px 0; line-height: 1.1; }
+.plate-cost-big.cr-low { color: #2d4a3a; }
+.plate-cost-big.cr-mid { color: #b8860b; }
+.plate-cost-big.cr-high { color: var(--danger); }
+.plate-cost-sub { font-size: 12px; color: var(--ink-sub); }
+.plate-cost-sub b { color: var(--ink); }
+
+/* 原価率色分け(緑/黄/赤) */
+.cr-low { color: #2d6a47; font-weight: 700; }
+.cr-mid { color: #b8860b; font-weight: 700; }
+.cr-high { color: var(--danger); font-weight: 700; }
+
+/* 餃子モード 1皿原価強調 */
+.gyoza-grid > div b.accent.big { font-size: 18px; color: var(--accent-2); }
+
+@media (max-width: 600px) {
+  .plate-cost-big { font-size: 28px; }
+}
 .inline-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; }
 .inline-chip input { accent-color: var(--accent); }
 .item-row-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-sub); flex-wrap: wrap; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--line); }

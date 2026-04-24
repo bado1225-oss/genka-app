@@ -11,12 +11,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424m">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424m">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424m">
-<link rel="manifest" href="manifest.webmanifest?v=20260424m">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424n">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424n">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424n">
+<link rel="manifest" href="manifest.webmanifest?v=20260424n">
 <title>原価計算アプリ</title>
-<link rel="stylesheet" href="src/style.css?v=20260424m">
+<link rel="stylesheet" href="src/style.css?v=20260424n">
 </head>
 <body>
 <div class="app">
@@ -108,16 +108,34 @@
           <div class="summary-note" id="sum-note"></div>
         </div>
 
-        <!-- 販売価格シミュレーター (#2) -->
+        <!-- 追加コスト(任意): 店内提供向け -->
         <div class="section-card">
-          <div class="section-title">販売価格シミュレーター</div>
+          <div class="section-title">追加コスト(任意・1皿あたり)</div>
           <div class="grid-3">
-            <label>販売価格(円)<input type="number" id="edit-selling-price" step="1" value="0" oninput="recompute()"></label>
+            <label>仕込み人件費(円)<input type="number" id="edit-labor-prep" step="1" value="0" oninput="recompute()"></label>
+            <label>調理人件費(円)<input type="number" id="edit-labor-cook" step="1" value="0" oninput="recompute()"></label>
+            <label>光熱費(円)<input type="number" id="edit-utility" step="1" value="0" oninput="recompute()"></label>
+            <label>その他製造コスト(円)<input type="number" id="edit-other-cost" step="1" value="0" oninput="recompute()"></label>
+            <label>焼成油原価(円・餃子等)<input type="number" id="edit-oil-cost" step="1" value="0" oninput="recompute()"></label>
+            <label>タレ原価(円)<input type="number" id="edit-sauce-cost" step="1" value="0" oninput="recompute()"></label>
+          </div>
+          <div class="muted-note">材料原価とは別にかかる店内提供コスト。省略可(デフォルト ¥0)。</div>
+        </div>
+
+        <!-- 販売価格シミュレーター (#2) 店内提供 -->
+        <div class="section-card">
+          <div class="section-title">販売価格シミュレーター(店内提供)</div>
+          <div class="plate-cost-banner">
+            <div class="s-label">1皿原価</div>
+            <div id="plate-cost-big" class="plate-cost-big">¥0</div>
+            <div class="plate-cost-sub">材料 <b id="sim-material">¥0</b> + 追加コスト <b id="sim-additional">¥0</b> = <b id="sim-plate-cost">¥0</b></div>
+          </div>
+          <div class="grid-3">
+            <label>店内販売価格(円)<input type="number" id="edit-selling-price" step="1" value="0" oninput="recompute()"></label>
             <label>目標原価率(%)<input type="number" id="edit-target-cr" step="0.1" value="30" oninput="recompute()"></label>
             <label>目標粗利(円)<input type="number" id="edit-target-margin" step="1" value="0" oninput="recompute()"></label>
           </div>
           <div class="sim-grid">
-            <div class="sim-item"><div class="s-label">1人前 原価</div><div id="sim-cost" class="sim-val">–</div></div>
             <div class="sim-item"><div class="s-label">販売価格</div><div id="sim-selling" class="sim-val">–</div></div>
             <div class="sim-item"><div class="s-label">原価率</div><div id="sim-cr" class="sim-val">–</div></div>
             <div class="sim-item"><div class="s-label">粗利額</div><div id="sim-margin" class="sim-val accent">–</div></div>
@@ -169,35 +187,41 @@
           </div>
         </div>
 
-        <!-- 餃子モード (#6) -->
+        <!-- 餃子モード (#6) 店内提供向け -->
         <div class="section-card" id="gyoza-mode-card" style="display:none;">
-          <div class="section-title">🥟 餃子専用モード</div>
+          <div class="section-title">🥟 餃子専用モード(店内提供)</div>
           <div class="grid-3">
             <label>1個重量(g)<input type="number" id="edit-piece-weight" step="0.1" value="17" oninput="recompute()"></label>
             <label>1個あたり皮重量(g)<input type="number" id="edit-skin-weight" step="0.1" value="10" oninput="recompute()"></label>
             <label class="readonly"><span>1個あたり餡量</span><output id="gz-an-per-piece">–</output></label>
           </div>
+          <div class="section-subtitle">1皿原価の内訳</div>
           <div class="gyoza-grid">
-            <div><span class="s-label">1人前個数</span> <b id="gz-pieces">–</b></div>
-            <div><span class="s-label">餡総量(1人前)</span> <b id="gz-an-total">–</b></div>
-            <div><span class="s-label">皮必要枚数</span> <b id="gz-skin-count">–</b></div>
+            <div><span class="s-label">1皿個数</span> <b id="gz-pieces">–</b></div>
+            <div><span class="s-label">1個原価(餡+皮)</span> <b id="gz-cost-1" class="accent">–</b></div>
+            <div><span class="s-label">餡原価(1皿)</span> <b id="gz-an-cost" class="accent">–</b></div>
+            <div><span class="s-label">皮原価(1皿)</span> <b id="gz-skin-cost" class="accent">–</b></div>
+            <div><span class="s-label">焼成油原価</span> <b id="gz-oil-cost">–</b></div>
+            <div><span class="s-label">タレ原価</span> <b id="gz-sauce-cost">–</b></div>
+            <div><span class="s-label">その他追加コスト</span> <b id="gz-additional">–</b></div>
+            <div><span class="s-label">1皿原価(合計)</span> <b id="gz-plate-cost" class="accent big">–</b></div>
+            <div><span class="s-label">店内販売価格</span> <b id="gz-selling">–</b></div>
+            <div><span class="s-label">粗利額</span> <b id="gz-margin">–</b></div>
+            <div><span class="s-label">原価率</span> <b id="gz-cr">–</b></div>
+          </div>
+          <div class="section-subtitle">店内提供個数別 1皿原価比較</div>
+          <div class="muted-note">※ 油・タレ・追加コストは1皿あたりで固定、食材原価のみ個数に比例</div>
+          <table class="ing-table compact">
+            <thead><tr><th>提供</th><th>食材原価</th><th>1皿原価</th><th>販売価格</th><th>粗利</th><th>原価率</th></tr></thead>
+            <tbody id="gz-serving-tbody"></tbody>
+          </table>
+          <div class="gyoza-grid" style="margin-top:10px">
             <div><span class="s-label">1個あたり皮</span> <b id="gz-skin-per-piece">–</b></div>
             <div><span class="s-label">皮単価/個</span> <b id="gz-skin-price-per-piece">–</b></div>
-            <div><span class="s-label">炭火焼鶏</span> <b id="gz-chicken-g">–</b></div>
-            <div><span class="s-label">豚ミンチ</span> <b id="gz-pork-g">–</b></div>
-            <div><span class="s-label">野菜(水抜き後)</span> <b id="gz-veg-after">–</b></div>
-            <div><span class="s-label">野菜(水抜き前)</span> <b id="gz-veg-before">–</b></div>
-            <div><span class="s-label">塩量</span> <b id="gz-salt">–</b></div>
-            <div><span class="s-label">1個原価</span> <b id="gz-cost-1" class="accent">–</b></div>
-            <div><span class="s-label">5個入り原価</span> <b id="gz-cost-5" class="accent">–</b></div>
-            <div><span class="s-label">10個入り原価</span> <b id="gz-cost-10" class="accent">–</b></div>
+            <div><span class="s-label">餡総量(1皿)</span> <b id="gz-an-total">–</b></div>
+            <div><span class="s-label">皮必要枚数</span> <b id="gz-skin-count">–</b></div>
           </div>
-          <div class="section-subtitle">販売価格別 粗利早見</div>
-          <table class="ing-table compact">
-            <thead><tr><th>パック</th><th>販売価格</th><th>原価</th><th>粗利</th><th>原価率</th></tr></thead>
-            <tbody id="gz-pack-tbody"></tbody>
-          </table>
-          <div class="muted-note">※ 補助タブの端材換算・水抜き計算・皮単価表も活用してください。</div>
+          <div class="muted-note">※ メモ機能タブの端材換算・水抜き計算・皮単価表も活用できます。</div>
         </div>
 
         <div class="action-row save-row sticky-save">
@@ -405,6 +429,6 @@
   </div>
 </div>
 
-<script src="src/main.js?v=20260424m"></script>
+<script src="src/main.js?v=20260424n"></script>
 </body>
 </html>
