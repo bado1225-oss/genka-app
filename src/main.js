@@ -77,12 +77,12 @@ function migrateLegacy(){
     if(r.target_food_cost_rate === undefined){
       r.target_food_cost_rate = num(r.target_cost_ratio, 30);
     }
+    if(r.target_margin === undefined) r.target_margin = 0;
     if(r.notes === undefined) r.notes = r.per_serving_desc || '';
     if(r.category === undefined) r.category = '';
     // 旧フィールドは保持しない(消去)
     delete r.per_serving_desc;
     delete r.target_cost_ratio;
-    delete r.target_margin;
     delete r.piece_weight_g;
     delete r.skin_weight_per_piece;
     delete r.labor_prep_cost;
@@ -191,6 +191,7 @@ function makeRecipe(init){
     servings: 1,                    // 何人前/1皿(sharing dishで>1)
     selling_price: 0,               // 店内販売価格(1皿)
     target_food_cost_rate: 30,      // 目標原価率(%)
+    target_margin: 0,               // 目標粗利額(円・任意)
     notes: '',                      // フリーメモ
     items: [],
     updated_at: new Date().toISOString(),
@@ -265,17 +266,36 @@ function calcRecipe(r){
   const per_serving_cost = ing_cost / servings; // 1人前原価
   const selling = num(r.selling_price, 0);
   const target_rate = num(r.target_food_cost_rate, 30) / 100;
+  const target_margin = num(r.target_margin, 0);
   const cost_ratio = selling > 0 ? per_plate_cost / selling : 0;
   const margin = selling - per_plate_cost;
   const margin_ratio = selling > 0 ? margin / selling : 0;
-  const suggested_price = target_rate > 0 ? per_plate_cost / target_rate : 0;
+  const suggested_price_by_ratio = target_rate > 0 ? per_plate_cost / target_rate : 0;
+  const suggested_price_by_margin = target_margin > 0 ? per_plate_cost + target_margin : 0;
+  // 後方互換
+  const suggested_price = suggested_price_by_ratio;
   const over_target = selling > 0 && cost_ratio > target_rate;
   return {
     rows, ing_cost, total_qty, raw_total,
     servings, per_plate_cost, per_serving_cost,
     selling, cost_ratio, margin, margin_ratio,
-    suggested_price, target_rate, over_target,
+    suggested_price, suggested_price_by_ratio, suggested_price_by_margin,
+    target_rate, target_margin, over_target,
   };
+}
+
+// キリの良い価格に丸める (10/50/100円単位)
+function roundToNice(p, step){
+  step = step || 50;
+  return Math.round(p/step)*step;
+}
+
+// 指定した販売価格でのシミュレーション結果
+function simulateAtPrice(plate_cost, price){
+  const cost_ratio = price > 0 ? plate_cost / price : 0;
+  const margin = price - plate_cost;
+  const margin_ratio = price > 0 ? margin / price : 0;
+  return { price, cost_ratio, margin, margin_ratio };
 }
 
 // 原価率の絶対色分け (≤30 緑 / 30-35 黄 / >35 赤)
@@ -455,6 +475,10 @@ function openRecipe(id){
   document.getElementById('edit-notes').value = r.notes || '';
   document.getElementById('edit-selling-price').value = num(r.selling_price, 0);
   document.getElementById('edit-target-cr').value = num(r.target_food_cost_rate, 30);
+  const tm = document.getElementById('edit-target-margin');
+  if(tm) tm.value = num(r.target_margin, 0);
+  const simInput = document.getElementById('sim-trial-price');
+  if(simInput) simInput.value = '';
   document.getElementById('save-stamp').textContent = r.updated_at ? `最終保存 ${new Date(r.updated_at).toLocaleString('ja-JP')}` : '';
   renderItems();
   recompute();
@@ -492,6 +516,8 @@ function writeBackForm(r){
   r.notes = document.getElementById('edit-notes').value || '';
   r.selling_price = num(document.getElementById('edit-selling-price').value, 0);
   r.target_food_cost_rate = num(document.getElementById('edit-target-cr').value, 30);
+  const tm = document.getElementById('edit-target-margin');
+  if(tm) r.target_margin = num(tm.value, 0);
 }
 
 function buildIngredientOptionsFiltered(category){
@@ -616,6 +642,53 @@ function recompute(){
   const c = calcRecipe(r);
   renderBigKPI(r, c);
   renderCostDetail(r, c);
+  renderPriceSim(r, c);
+}
+
+// 販売価格シミュレーション
+function renderPriceSim(r, c){
+  const setText = (id, v, cls) => { const el=document.getElementById(id); if(el){ el.textContent = v; if(cls!==undefined) el.className = cls; } };
+  // 推奨価格2種
+  setText('sim-sugg-by-ratio', c.suggested_price_by_ratio>0 ? '¥'+fmt(roundToNice(c.suggested_price_by_ratio, 10), 0) : '–');
+  setText('sim-sugg-by-ratio-raw', c.suggested_price_by_ratio>0 ? '(実値 ¥'+fmt(c.suggested_price_by_ratio, 1)+')' : '');
+  setText('sim-sugg-by-margin', c.suggested_price_by_margin>0 ? '¥'+fmt(roundToNice(c.suggested_price_by_margin, 10), 0) : '–');
+  setText('sim-sugg-by-margin-raw', c.suggested_price_by_margin>0 ? '(実値 ¥'+fmt(c.suggested_price_by_margin, 1)+')' : '');
+  // 試算価格
+  const simInput = document.getElementById('sim-trial-price');
+  const trialPrice = simInput ? num(simInput.value, 0) : 0;
+  const trialEl = document.getElementById('sim-trial-result');
+  if(trialEl){
+    if(trialPrice > 0 && c.per_plate_cost > 0){
+      const s = simulateAtPrice(c.per_plate_cost, trialPrice);
+      const cls = costRateClass(s.cost_ratio);
+      trialEl.innerHTML = `<span class="${cls}">原価率 ${fmt(s.cost_ratio*100,1)}%</span> / 粗利 <b class="${s.margin<0?'cr-high':'accent'}">¥${fmt(s.margin,0)}</b> / 粗利率 ${fmt(s.margin_ratio*100,1)}%`;
+    } else {
+      trialEl.innerHTML = '<span class="muted">試算価格を入力してください</span>';
+    }
+  }
+  // 価格帯比較テーブル: 現価格周辺 or 推奨価格周辺 で ±100 刻み
+  const tbody = document.getElementById('sim-price-tbody');
+  if(tbody){
+    if(c.per_plate_cost <= 0){
+      tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center">材料を入力してください</td></tr>';
+    } else {
+      const basePrice = c.selling > 0 ? c.selling : (c.suggested_price_by_ratio || c.per_plate_cost*3);
+      const center = roundToNice(basePrice, 100);
+      const prices = [center-200, center-100, center, center+100, center+200, center+300].filter(p => p > c.per_plate_cost);
+      tbody.innerHTML = prices.map(p => {
+        const s = simulateAtPrice(c.per_plate_cost, p);
+        const cls = costRateClass(s.cost_ratio);
+        const marginCls = s.margin<0 ? 'cr-high' : 'accent';
+        const current = (p === c.selling) ? ' 🟢現在' : '';
+        return `<tr class="${p===c.selling?'current-price-row':''}">
+          <td>¥${fmt(p,0)}${current}</td>
+          <td class="${cls}">${fmt(s.cost_ratio*100,1)}%</td>
+          <td class="${marginCls}"><b>¥${fmt(s.margin,0)}</b></td>
+          <td>${fmt(s.margin_ratio*100,1)}%</td>
+        </tr>`;
+      }).join('');
+    }
+  }
 }
 
 function renderBigKPI(r, c){

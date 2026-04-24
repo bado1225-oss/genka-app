@@ -317,6 +317,22 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
   .big-metric { font-size: 22px; }
   .big-kpi { padding: 10px 6px; }
 }
+
+/* 販売価格シミュレーション */
+.sugg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.sugg-card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; text-align: center; }
+.sugg-label { font-size: 12px; color: var(--ink-sub); }
+.sugg-label small { font-size: 10.5px; }
+.sugg-value { font-size: 24px; font-weight: 800; margin: 4px 0; color: var(--accent-2); letter-spacing: -0.02em; }
+.sugg-sub { font-size: 10.5px; }
+.sim-trial-result { background: #faf8f3; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0 12px; font-size: 14px; text-align: center; font-weight: 600; }
+.sim-trial-result .cr-low, .sim-trial-result .cr-mid, .sim-trial-result .cr-high { font-size: 15px; margin-right: 8px; }
+tr.current-price-row { background: #f3efe4; font-weight: 700; }
+tr.current-price-row td { border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
+
+@media (max-width: 600px) {
+  .sugg-value { font-size: 20px; }
+}
 .inline-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; }
 .inline-chip input { accent-color: var(--accent); }
 .item-row-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-sub); flex-wrap: wrap; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--line); }
