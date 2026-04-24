@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "master_type": "meat",
+  "generated_at": "2026-04-24",
+  "note": "肉類はすべて kg 単位 / price_per_g = standard_price_per_kg/1000 / yield_rate は可食部比率(0-1) / practical_price_1_2x/1_5x = standard × 1.2/1.5",
+  "items": [
+    { "id": "M001", "item_name": "牛こま肉",   "category": "牛肉",   "purchase_unit": "kg", "standard_price_per_kg": 1800, "price_per_g": 1.800, "yield_rate": 0.90, "practical_price_1_2x": 2160, "practical_price_1_5x": 2700, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M002", "item_name": "牛バラ肉",   "category": "牛肉",   "purchase_unit": "kg", "standard_price_per_kg": 2200, "price_per_g": 2.200, "yield_rate": 0.85, "practical_price_1_2x": 2640, "practical_price_1_5x": 3300, "memo": "業務用平均価格 / 部位により変動 / 脂身トリムでロスあり" },
+    { "id": "M003", "item_name": "牛ロース",   "category": "牛肉",   "purchase_unit": "kg", "standard_price_per_kg": 3500, "price_per_g": 3.500, "yield_rate": 0.90, "practical_price_1_2x": 4200, "practical_price_1_5x": 5250, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M004", "item_name": "牛ヒレ",     "category": "牛肉",   "purchase_unit": "kg", "standard_price_per_kg": 6000, "price_per_g": 6.000, "yield_rate": 0.85, "practical_price_1_2x": 7200, "practical_price_1_5x": 9000, "memo": "業務用平均価格 / 部位により変動 / 銀皮処理ロスあり" },
+    { "id": "M005", "item_name": "牛すじ",     "category": "牛肉",   "purchase_unit": "kg", "standard_price_per_kg": 900,  "price_per_g": 0.900, "yield_rate": 0.85, "practical_price_1_2x": 1080, "practical_price_1_5x": 1350, "memo": "業務用平均価格 / 部位により変動 / 下処理ロスあり" },
+    { "id": "M006", "item_name": "豚こま肉",   "category": "豚肉",   "purchase_unit": "kg", "standard_price_per_kg": 900,  "price_per_g": 0.900, "yield_rate": 0.90, "practical_price_1_2x": 1080, "practical_price_1_5x": 1350, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M007", "item_name": "豚バラ肉",   "category": "豚肉",   "purchase_unit": "kg", "standard_price_per_kg": 1200, "price_per_g": 1.200, "yield_rate": 0.90, "practical_price_1_2x": 1440, "practical_price_1_5x": 1800, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M008", "item_name": "豚ロース",   "category": "豚肉",   "purchase_unit": "kg", "standard_price_per_kg": 1300, "price_per_g": 1.300, "yield_rate": 0.90, "practical_price_1_2x": 1560, "practical_price_1_5x": 1950, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M009", "item_name": "豚ヒレ",     "category": "豚肉",   "purchase_unit": "kg", "standard_price_per_kg": 1500, "price_per_g": 1.500, "yield_rate": 0.90, "practical_price_1_2x": 1800, "practical_price_1_5x": 2250, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M010", "item_name": "豚ミンチ",   "category": "豚肉",   "purchase_unit": "kg", "standard_price_per_kg": 800,  "price_per_g": 0.800, "yield_rate": 1.00, "practical_price_1_2x": 960,  "practical_price_1_5x": 1200, "memo": "業務用平均価格 / 部位により変動 / ミンチは全量可食" },
+    { "id": "M011", "item_name": "鶏もも肉",   "category": "鶏肉",   "purchase_unit": "kg", "standard_price_per_kg": 800,  "price_per_g": 0.800, "yield_rate": 0.90, "practical_price_1_2x": 960,  "practical_price_1_5x": 1200, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M012", "item_name": "鶏むね肉",   "category": "鶏肉",   "purchase_unit": "kg", "standard_price_per_kg": 600,  "price_per_g": 0.600, "yield_rate": 0.90, "practical_price_1_2x": 720,  "practical_price_1_5x": 900,  "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M013", "item_name": "鶏ささみ",   "category": "鶏肉",   "purchase_unit": "kg", "standard_price_per_kg": 900,  "price_per_g": 0.900, "yield_rate": 0.90, "practical_price_1_2x": 1080, "practical_price_1_5x": 1350, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M014", "item_name": "鶏ミンチ",   "category": "鶏肉",   "purchase_unit": "kg", "standard_price_per_kg": 700,  "price_per_g": 0.700, "yield_rate": 1.00, "practical_price_1_2x": 840,  "practical_price_1_5x": 1050, "memo": "業務用平均価格 / 部位により変動 / ミンチは全量可食" },
+    { "id": "M015", "item_name": "手羽先",     "category": "鶏肉",   "purchase_unit": "kg", "standard_price_per_kg": 700,  "price_per_g": 0.700, "yield_rate": 0.70, "practical_price_1_2x": 840,  "practical_price_1_5x": 1050, "memo": "業務用平均価格 / 部位により変動 / 骨付きで可食部少ない" },
+    { "id": "M016", "item_name": "手羽元",     "category": "鶏肉",   "purchase_unit": "kg", "standard_price_per_kg": 650,  "price_per_g": 0.650, "yield_rate": 0.70, "practical_price_1_2x": 780,  "practical_price_1_5x": 975,  "memo": "業務用平均価格 / 部位により変動 / 骨付きで可食部少ない" },
+    { "id": "M017", "item_name": "ベーコン",   "category": "加工肉", "purchase_unit": "kg", "standard_price_per_kg": 1400, "price_per_g": 1.400, "yield_rate": 0.98, "practical_price_1_2x": 1680, "practical_price_1_5x": 2100, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M018", "item_name": "ハム",       "category": "加工肉", "purchase_unit": "kg", "standard_price_per_kg": 1200, "price_per_g": 1.200, "yield_rate": 0.98, "practical_price_1_2x": 1440, "practical_price_1_5x": 1800, "memo": "業務用平均価格 / 部位により変動" },
+    { "id": "M019", "item_name": "ウインナー", "category": "加工肉", "purchase_unit": "kg", "standard_price_per_kg": 1000, "price_per_g": 1.000, "yield_rate": 0.98, "practical_price_1_2x": 1200, "practical_price_1_5x": 1500, "memo": "業務用平均価格 / 部位により変動" }
+  ]
+}

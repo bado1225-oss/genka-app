@@ -755,6 +755,47 @@ function seedVegetables(){
   alert(`野菜マスター: ${added}件 追加 / ${skipped}件 既存スキップ`);
 }
 
+// ============ 肉マスター(19件) 一括取り込み ============
+const MEAT_MASTER = [
+  {id:'M001',name:'牛こま肉',   sub:'牛肉',   price:1800, yield:0.90},
+  {id:'M002',name:'牛バラ肉',   sub:'牛肉',   price:2200, yield:0.85},
+  {id:'M003',name:'牛ロース',   sub:'牛肉',   price:3500, yield:0.90},
+  {id:'M004',name:'牛ヒレ',     sub:'牛肉',   price:6000, yield:0.85},
+  {id:'M005',name:'牛すじ',     sub:'牛肉',   price:900,  yield:0.85},
+  {id:'M006',name:'豚こま肉',   sub:'豚肉',   price:900,  yield:0.90},
+  {id:'M007',name:'豚バラ肉',   sub:'豚肉',   price:1200, yield:0.90},
+  {id:'M008',name:'豚ロース',   sub:'豚肉',   price:1300, yield:0.90},
+  {id:'M009',name:'豚ヒレ',     sub:'豚肉',   price:1500, yield:0.90},
+  {id:'M010',name:'豚ミンチ',   sub:'豚肉',   price:800,  yield:1.00},
+  {id:'M011',name:'鶏もも肉',   sub:'鶏肉',   price:800,  yield:0.90},
+  {id:'M012',name:'鶏むね肉',   sub:'鶏肉',   price:600,  yield:0.90},
+  {id:'M013',name:'鶏ささみ',   sub:'鶏肉',   price:900,  yield:0.90},
+  {id:'M014',name:'鶏ミンチ',   sub:'鶏肉',   price:700,  yield:1.00},
+  {id:'M015',name:'手羽先',     sub:'鶏肉',   price:700,  yield:0.70},
+  {id:'M016',name:'手羽元',     sub:'鶏肉',   price:650,  yield:0.70},
+  {id:'M017',name:'ベーコン',   sub:'加工肉', price:1400, yield:0.98},
+  {id:'M018',name:'ハム',       sub:'加工肉', price:1200, yield:0.98},
+  {id:'M019',name:'ウインナー', sub:'加工肉', price:1000, yield:0.98},
+];
+
+function seedMeats(){
+  let added = 0, skipped = 0;
+  MEAT_MASTER.forEach(v => {
+    if(state.ingredients.some(i=>i.name===v.name)){ skipped++; return; }
+    state.ingredients.push(makeIngredient({
+      name: v.name,
+      category: '肉',
+      price_type: 'purchase',
+      kg_price: v.price,
+      memo: `[${v.id}] ${v.sub} / 歩留${Math.round(v.yield*100)}% / 業務用平均価格 / 部位により変動`,
+    }));
+    added++;
+  });
+  saveState();
+  renderMaster(); renderHero();
+  alert(`肉マスター: ${added}件 追加 / ${skipped}件 既存スキップ`);
+}
+
 // ============ 調味料マスター(32件) 一括取り込み ============
 const SEASONING_MASTER = [
   {id:'S001',name:'食塩',             sub:'基本調味料', unit:'kg', price:120,  yield:1.00},
