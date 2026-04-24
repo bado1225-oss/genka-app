@@ -11,12 +11,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424c">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424c">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424c">
-<link rel="manifest" href="manifest.webmanifest?v=20260424c">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424d">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424d">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424d">
+<link rel="manifest" href="manifest.webmanifest?v=20260424d">
 <title>原価計算アプリ</title>
-<link rel="stylesheet" href="src/style.css?v=20260424c">
+<link rel="stylesheet" href="src/style.css?v=20260424d">
 </head>
 <body>
 <div class="app">
@@ -149,7 +149,8 @@
         </div>
         <div class="action-row">
           <button class="primary-btn" onclick="addIngredient()">＋ 食材を追加</button>
-          <button class="ghost-btn" onclick="seedMaster()">🌱 サンプル食材一括追加(餃子一式)</button>
+          <button class="ghost-btn" onclick="seedVegetables()">🥬 野菜マスター(27件) 一括追加</button>
+          <button class="ghost-btn" onclick="seedMaster()">🥟 餃子一式の食材を追加</button>
         </div>
         <div class="muted-note">🟢 市場価格(週次等で更新) / 🔵 仕入れ価格(安定) / 🟠 都度入力(魚など変動大)</div>
         <div id="master-list"></div>
@@ -234,9 +235,10 @@
       <div class="section-card">
         <div class="section-title">サンプル投入</div>
         <div class="action-row">
-          <button class="primary-btn" onclick="seedAll()">🌱 炭火焼鶏餃子 一式(食材+レシピ)</button>
+          <button class="primary-btn" onclick="seedVegetables()">🥬 野菜マスター(27件)</button>
+          <button class="ghost-btn" onclick="seedAll()">🥟 炭火焼鶏餃子 一式(食材+レシピ)</button>
         </div>
-        <div class="muted-note">食材マスタ(17件)と炭火焼鶏餃子レシピを追加します。</div>
+        <div class="muted-note">野菜マスターは市場価格ベースの基準単価。餃子一式は食材(17件)とレシピを追加します。</div>
       </div>
       <div class="section-card">
         <div class="section-title">全削除</div>
@@ -284,6 +286,6 @@
   </div>
 </div>
 
-<script src="src/main.js?v=20260424c"></script>
+<script src="src/main.js?v=20260424d"></script>
 </body>
 </html>

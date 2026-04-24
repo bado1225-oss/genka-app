@@ -664,6 +664,55 @@ function seedMaster(){
   alert(`食材マスタに${added.length}件追加しました(既存重複はスキップ)`);
 }
 
+// ============ 野菜価格マスター(27件) 一括取り込み ============
+const VEGETABLE_MASTER = [
+  {id:'V001',name:'キャベツ',     sub:'葉物',    kg:92,   yield:0.85,memo:'市場価格ベース'},
+  {id:'V002',name:'はくさい',     sub:'葉物',    kg:56,   yield:0.85,memo:'市場価格ベース'},
+  {id:'V003',name:'だいこん',     sub:'根菜',    kg:74,   yield:0.90,memo:'市場価格ベース'},
+  {id:'V004',name:'にんじん',     sub:'根菜',    kg:192,  yield:0.90,memo:'市場価格ベース'},
+  {id:'V005',name:'たまねぎ',     sub:'根菜',    kg:245,  yield:0.90,memo:'市場価格ベース'},
+  {id:'V006',name:'じゃがいも',   sub:'芋類',    kg:293,  yield:0.90,memo:'市場価格ベース'},
+  {id:'V007',name:'さつまいも',   sub:'芋類',    kg:284,  yield:0.90,memo:'市場価格ベース'},
+  {id:'V008',name:'ねぎ',         sub:'香味野菜',kg:341,  yield:0.85,memo:'市場価格ベース'},
+  {id:'V009',name:'にら',         sub:'香味野菜',kg:618,  yield:0.85,memo:'市場価格ベース'},
+  {id:'V010',name:'ほうれんそう', sub:'葉物',    kg:496,  yield:0.85,memo:'市場価格ベース'},
+  {id:'V011',name:'小松菜',       sub:'葉物',    kg:275,  yield:0.85,memo:'市場価格ベース'},
+  {id:'V012',name:'水菜',         sub:'葉物',    kg:317,  yield:0.85,memo:'市場価格ベース'},
+  {id:'V013',name:'レタス',       sub:'葉物',    kg:167,  yield:0.85,memo:'市場価格ベース'},
+  {id:'V014',name:'きゅうり',     sub:'果菜',    kg:397,  yield:0.95,memo:'市場価格ベース'},
+  {id:'V015',name:'なす',         sub:'果菜',    kg:478,  yield:0.95,memo:'市場価格ベース'},
+  {id:'V016',name:'トマト',       sub:'果菜',    kg:430,  yield:0.95,memo:'市場価格ベース'},
+  {id:'V017',name:'ミニトマト',   sub:'果菜',    kg:624,  yield:0.95,memo:'市場価格ベース'},
+  {id:'V018',name:'ピーマン',     sub:'果菜',    kg:704,  yield:0.95,memo:'市場価格ベース'},
+  {id:'V019',name:'ごぼう',       sub:'根菜',    kg:380,  yield:0.85,memo:'市場価格ベース'},
+  {id:'V020',name:'れんこん',     sub:'根菜',    kg:369,  yield:0.85,memo:'市場価格ベース'},
+  {id:'V021',name:'ブロッコリー', sub:'その他',  kg:424,  yield:0.80,memo:'花蕾類/市場価格ベース'},
+  {id:'V022',name:'かぼちゃ',     sub:'果菜',    kg:245,  yield:0.80,memo:'市場価格ベース'},
+  {id:'V023',name:'にんにく',     sub:'香味野菜',kg:1567, yield:0.90,memo:'輸入物中心で価格変動大/市場価格ベース'},
+  {id:'V024',name:'しょうが',     sub:'香味野菜',kg:1198, yield:0.90,memo:'市場価格ベース'},
+  {id:'V025',name:'生しいたけ',   sub:'きのこ',  kg:1017, yield:0.95,memo:'市場価格ベース'},
+  {id:'V026',name:'えのきだけ',   sub:'きのこ',  kg:288,  yield:0.95,memo:'市場価格ベース'},
+  {id:'V027',name:'しめじ',       sub:'きのこ',  kg:399,  yield:0.95,memo:'市場価格ベース'},
+];
+
+function seedVegetables(){
+  let added = 0, skipped = 0;
+  VEGETABLE_MASTER.forEach(v => {
+    if(state.ingredients.some(i=>i.name===v.name)){ skipped++; return; }
+    state.ingredients.push(makeIngredient({
+      name: v.name,
+      category: '野菜',
+      price_type: 'market',
+      kg_price: v.kg,
+      memo: `[${v.id}] ${v.sub} / 歩留${Math.round(v.yield*100)}% / ${v.memo}`,
+    }));
+    added++;
+  });
+  saveState();
+  renderMaster(); renderHero();
+  alert(`野菜マスター: ${added}件 追加 / ${skipped}件 既存スキップ`);
+}
+
 function seedAll(){
   // まずマスタ投入(重複スキップ)
   SEED_INGREDIENTS.forEach(s => {
