@@ -64,11 +64,18 @@ function migrateLegacy(){
     // 旧フィールドを削除
     delete r.auto_salt; delete r.salt_ratio_pct; delete r.salt_ingredient_id;
     delete r.skin_enabled; delete r.skin_ingredient_id; delete r.skin_g_per_serving;
-    // items の x2/dewater → multiplier, spot_price → price_override
+    // items の x2/dewater → multiplier → yield_pct、spot_price → price_override
     (r.items||[]).forEach(it => {
-      if(it.multiplier === undefined){
+      // multiplier 未設定時は x2 から暫定
+      if(it.multiplier === undefined && it.yield_pct === undefined){
         it.multiplier = it.x2 ? 2 : 1;
       }
+      // multiplier → yield_pct (yield_pct = 100/multiplier)
+      if(it.yield_pct === undefined){
+        const m = num(it.multiplier, 1);
+        it.yield_pct = m > 0 ? Math.round((100/m)*10)/10 : 100;
+      }
+      delete it.multiplier;
       delete it.x2;
       delete it.dewater;
       if(it.spot_price !== undefined){
@@ -115,7 +122,7 @@ function makeItem(init){
     id: uid('it'),
     ingredient_id: null,
     grams: 0,
-    multiplier: 1,
+    yield_pct: 100, // 歩留まり(%) 100=ロスなし、50=半分ロス(実仕入は2倍必要)
     price_override: null, // このレシピでのみ適用する kg単価(null=マスタ値を使用)
   }, init||{});
 }
@@ -142,17 +149,19 @@ function calcRecipe(r){
     const ing = getIngredient(it.ingredient_id);
     const price = effectivePrice(it);
     const g = num(it.grams);
-    const mul = num(it.multiplier, 1);
+    const yp = num(it.yield_pct, 100);
+    const yield_rate = yp > 0 ? yp/100 : 1; // 0%は無効扱い
+    const raw_g = g / yield_rate; // 仕入が必要な量(歩留前重量)
     const has_price = price != null && ing;
-    const cost = has_price ? g * (price/1000) * mul : 0;
-    return { item: it, ingredient: ing, price, g, mul, cost, has_price };
+    const cost = has_price ? raw_g * (price/1000) : 0;
+    return { item: it, ingredient: ing, price, g, raw_g, yield_pct: yp, cost, has_price };
   });
   const ing_cost = rows.reduce((s,x)=>s+x.cost, 0);
-  const total_g = rows.reduce((s,x)=>s+x.g, 0);
-  const mass_g = rows.reduce((s,x)=>s+(x.g*x.mul), 0);
+  const total_g = rows.reduce((s,x)=>s+x.g, 0);   // 1人前出来上がり
+  const mass_g = rows.reduce((s,x)=>s+x.raw_g, 0); // 1人前 仕入必要量
   const per_cost = ing_cost;
   const mass_total = mass_g || 1;
-  rows.forEach(x => { x.mass_ratio = (x.g*x.mul)/mass_total; });
+  rows.forEach(x => { x.mass_ratio = x.raw_g/mass_total; });
   return {rows, ing_cost, total_g, mass_g, per_cost};
 }
 
@@ -334,14 +343,17 @@ function renderItemCard(it, idx){
   const selOpts = `<option value="">(食材を選択)</option>` + optsAll;
   const priceInfo = ing ? priceBadgeHtml(ing, it) : '<span class="muted">未選択</span>';
   const price = effectivePrice(it);
-  const mul = num(it.multiplier, 1);
-  const cost = (price!=null && ing) ? (num(it.grams) * price/1000 * mul) : 0;
+  const yp = num(it.yield_pct, 100);
+  const yield_rate = yp > 0 ? yp/100 : 1;
+  const raw_g = num(it.grams) / yield_rate;
+  const cost = (price!=null && ing) ? (raw_g * price/1000) : 0;
   const masterPrice = ing ? num(ing.kg_price) : null;
   const overridden = hasPriceOverride(it);
   const priceVal = overridden ? it.price_override : (masterPrice!=null ? masterPrice : '');
   const resetBtn = overridden
     ? `<button type="button" class="reset-link" onclick="updateItem('${it.id}','price_override',null)" title="マスタ単価に戻す">↺</button>`
     : '';
+  const yieldNote = yp < 100 ? `<span class="yield-hint">仕入必要 ${fmt(raw_g,1)}g</span>` : '';
   return `<div class="item-card${overridden?' has-override':''}" data-id="${it.id}">
     <div class="item-row-main">
       <select class="item-ing-select" onchange="updateItem('${it.id}','ingredient_id',this.value)">
@@ -358,13 +370,14 @@ function renderItemCard(it, idx){
         <span>kg単価¥ ${resetBtn}</span>
         <input type="number" step="1" value="${priceVal}" placeholder="${masterPrice!=null?fmt(masterPrice,0):'(食材未選択)'}" onchange="updateItem('${it.id}','price_override',this.value)" title="このレシピだけで使う kg単価。空欄でマスタ値に戻ります">
       </label>
-      <label class="inline-field mul">
-        <span>倍率</span>
-        <input type="number" step="0.1" min="0" value="${mul}" onchange="updateItem('${it.id}','multiplier',this.value)" title="使用g に対する倍率">
+      <label class="inline-field yield">
+        <span>歩留まり(%)</span>
+        <input type="number" step="0.1" min="0" max="100" value="${yp}" onchange="updateItem('${it.id}','yield_pct',this.value)" title="100=ロスなし / 80=20%ロス / 50=半分ロス(実仕入は使用gの2倍必要)">
       </label>
     </div>
     <div class="item-row-info">
       ${priceInfo}
+      ${yieldNote}
       <span class="item-cost">原価 <b>¥${fmt(cost,2)}</b></span>
     </div>
   </div>`;
@@ -396,8 +409,12 @@ function updateItem(id, key, value){
     } else {
       it.price_override = num(value);
     }
-  } else if(key==='multiplier'){
-    it.multiplier = value==='' ? 1 : num(value, 1);
+  } else if(key==='yield_pct'){
+    if(value==='' || value===null) it.yield_pct = 100;
+    else {
+      const v = num(value, 100);
+      it.yield_pct = Math.max(0, Math.min(100, v));
+    }
   }
   renderItems();
   recompute();
@@ -745,34 +762,33 @@ function seedAll(){
   const byName = Object.fromEntries(state.ingredients.map(i=>[i.name,i]));
   // レシピ生成: 1人前 = 5個 (5×17=85g)
   const recipeItems = [
-    {name:'地頭鶏(炭火焼)',     base:2650, multiplier:1},
-    {name:'豚ミンチ2mm',        base:3000, multiplier:1},
-    {name:'キャベツ',           base:4320, multiplier:2},
-    {name:'玉ねぎ',             base:580,  multiplier:2},
-    {name:'ニラ',               base:180,  multiplier:2},
-    {name:'コンソメ(スープ用)', base:48,   multiplier:1},
-    {name:'水',                 base:3000, multiplier:1},
-    {name:'にんにく',           base:430,  multiplier:1},
-    {name:'しょうが',           base:144,  multiplier:1},
-    {name:'オイスターソース',   base:156,  multiplier:1},
-    {name:'醤油',               base:156,  multiplier:1},
-    {name:'味の素',             base:96,   multiplier:1},
-    {name:'コンソメ',           base:84,   multiplier:1},
-    {name:'ごま油',             base:84,   multiplier:1},
-    {name:'砂糖',               base:72,   multiplier:1},
+    {name:'地頭鶏(炭火焼)',     base:2650, yield_pct:100},
+    {name:'豚ミンチ2mm',        base:3000, yield_pct:100},
+    {name:'キャベツ',           base:4320, yield_pct:50},  // 塩水抜きで半分ロス
+    {name:'玉ねぎ',             base:580,  yield_pct:50},
+    {name:'ニラ',               base:180,  yield_pct:50},
+    {name:'コンソメ(スープ用)', base:48,   yield_pct:100},
+    {name:'水',                 base:3000, yield_pct:100},
+    {name:'にんにく',           base:430,  yield_pct:100},
+    {name:'しょうが',           base:144,  yield_pct:100},
+    {name:'オイスターソース',   base:156,  yield_pct:100},
+    {name:'醤油',               base:156,  yield_pct:100},
+    {name:'味の素',             base:96,   yield_pct:100},
+    {name:'コンソメ',           base:84,   yield_pct:100},
+    {name:'ごま油',             base:84,   yield_pct:100},
+    {name:'砂糖',               base:72,   yield_pct:100},
   ];
   const total_base = recipeItems.reduce((s,x)=>s+x.base,0); // 15000
   const per_serving_g = 5 * 17; // 85g
   const ratio = per_serving_g / total_base;
   const items = recipeItems.map(ri => {
     const ing = byName[ri.name];
-    return makeItem({ingredient_id: ing?.id || null, grams: +(ri.base*ratio).toFixed(3), multiplier: ri.multiplier});
+    return makeItem({ingredient_id: ing?.id || null, grams: +(ri.base*ratio).toFixed(3), yield_pct: ri.yield_pct});
   });
-  // 皮(10g×5個=50g) と 塩(水抜き用: 28.787g×2×2%=1.15g) を通常材料として追加
   const skin = byName['餃子の皮 10cm'];
   const salt = byName['塩(水抜き用)'];
-  if(skin) items.push(makeItem({ingredient_id: skin.id, grams: 50, multiplier: 1}));
-  if(salt) items.push(makeItem({ingredient_id: salt.id, grams: 1.15, multiplier: 1}));
+  if(skin) items.push(makeItem({ingredient_id: skin.id, grams: 50, yield_pct: 100}));
+  if(salt) items.push(makeItem({ingredient_id: salt.id, grams: 1.15, yield_pct: 100}));
   const recipe = makeRecipe({
     name:'炭火焼鶏餃子',
     category:'餃子',

@@ -141,7 +141,9 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .inline-field input { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13px; width: 110px; text-align: right; }
 .inline-field.spot input { border-color: #e0b87a; background: #fffaf2; }
 .inline-field.mul input { width: 70px; }
+.inline-field.yield input { width: 80px; }
 .inline-field.price input { width: 100px; }
+.yield-hint { color: var(--warn); font-size: 11px; }
 .inline-field.price.override input { border-color: #c67b1d; background: #fff7e8; color: #8a4e00; font-weight: 600; }
 .inline-field.price.override > span { color: #c67b1d; font-weight: 600; }
 .reset-link { background: transparent; border: 0; color: var(--accent-2); cursor: pointer; font-size: 11px; padding: 0 4px; font-weight: 600; }
