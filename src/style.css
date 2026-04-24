@@ -134,7 +134,15 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 #item-list { display: flex; flex-direction: column; gap: 8px; }
 .item-card { background: #faf8f3; border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .item-row-main { display: flex; gap: 8px; align-items: center; }
-.item-row-main select { flex: 1; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; min-width: 0; }
+.item-selects-wrap { display: flex; gap: 6px; flex: 1; min-width: 0; }
+.item-selects-wrap select { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; min-width: 0; }
+.item-cat-select { flex: 0 0 100px; }
+.item-ing-select { flex: 1; }
+.item-ing-select[disabled] { color: var(--ink-sub); background: #faf8f3; }
+@media (max-width: 480px) {
+  .item-selects-wrap { flex-direction: column; gap: 4px; }
+  .item-cat-select { flex: none; }
+}
 .icon-del { background: transparent; border: 0; color: var(--danger); cursor: pointer; font-size: 18px; padding: 4px 8px; }
 .item-row-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .inline-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--ink-sub); }

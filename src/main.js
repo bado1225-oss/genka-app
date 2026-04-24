@@ -83,6 +83,11 @@ function migrateLegacy(){
         delete it.spot_price;
       }
       if(it.price_override === undefined) it.price_override = null;
+      // selected_category を導出
+      if(it.selected_category === undefined){
+        const ing = getIngredient(it.ingredient_id);
+        it.selected_category = ing ? ing.category : null;
+      }
     });
   });
 }
@@ -118,13 +123,21 @@ function makeRecipe(init){
   }, init||{});
 }
 function makeItem(init){
-  return Object.assign({
+  const base = {
     id: uid('it'),
     ingredient_id: null,
     grams: 0,
     yield_pct: 100, // 歩留まり(%) 100=ロスなし、50=半分ロス(実仕入は2倍必要)
     price_override: null, // このレシピでのみ適用する kg単価(null=マスタ値を使用)
-  }, init||{});
+    selected_category: null, // UI: カテゴリ選択状態(食材選択時に自動セット)
+  };
+  const obj = Object.assign(base, init||{});
+  // ingredient_id から category 自動導出
+  if(obj.ingredient_id && !obj.selected_category){
+    const ing = getIngredient(obj.ingredient_id);
+    if(ing) obj.selected_category = ing.category;
+  }
+  return obj;
 }
 
 function getIngredient(id){return state.ingredients.find(i=>i.id===id);}
@@ -309,22 +322,12 @@ function writeBackForm(r){
   r.per_serving_desc = document.getElementById('edit-serving-desc').value || '';
 }
 
-function buildIngredientOptions(){
-  const groups = {};
-  INGREDIENT_CATS.forEach(c=>groups[c]=[]);
-  state.ingredients.forEach(i => (groups[i.category]||groups['その他']).push(i));
-  // 各グループ内は名前順にソート
-  Object.values(groups).forEach(arr => arr.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ja')));
-  let html = '';
-  INGREDIENT_CATS.forEach(c=>{
-    if(!groups[c].length) return;
-    html += `<optgroup label="${c}">`;
-    groups[c].forEach(i=>{
-      html += `<option value="${i.id}">${esc(i.name)}</option>`;
-    });
-    html += `</optgroup>`;
-  });
-  return html;
+function buildIngredientOptionsFiltered(category){
+  if(!category) return '';
+  const list = state.ingredients
+    .filter(i => i.category === category)
+    .sort((a,b) => (a.name||'').localeCompare(b.name||'','ja'));
+  return list.map(i => `<option value="${i.id}">${esc(i.name)}</option>`).join('');
 }
 
 // ----- 材料行 -----
@@ -340,8 +343,12 @@ function renderItems(){
 
 function renderItemCard(it, idx){
   const ing = getIngredient(it.ingredient_id);
-  const optsAll = buildIngredientOptions();
-  const selOpts = `<option value="">(食材を選択)</option>` + optsAll;
+  const category = it.selected_category || (ing ? ing.category : '');
+  const catOpts = INGREDIENT_CATS.map(c => `<option value="${c}"${category===c?' selected':''}>${c}</option>`).join('');
+  const ingOpts = buildIngredientOptionsFiltered(category);
+  const ingOptsWithSelected = it.ingredient_id
+    ? ingOpts.replace(`value="${it.ingredient_id}"`, `value="${it.ingredient_id}" selected`)
+    : ingOpts;
   const priceInfo = ing ? priceBadgeHtml(ing, it) : '<span class="muted">未選択</span>';
   const price = effectivePrice(it);
   const yp = num(it.yield_pct, 100);
@@ -357,9 +364,16 @@ function renderItemCard(it, idx){
   const yieldNote = yp < 100 ? `<span class="yield-hint">仕入必要 ${fmt(raw_g,1)}g</span>` : '';
   return `<div class="item-card${overridden?' has-override':''}" data-id="${it.id}">
     <div class="item-row-main">
-      <select class="item-ing-select" onchange="updateItem('${it.id}','ingredient_id',this.value)">
-        ${selOpts.replace(`value="${it.ingredient_id}"`, `value="${it.ingredient_id}" selected`)}
-      </select>
+      <div class="item-selects-wrap">
+        <select class="item-cat-select" onchange="updateItem('${it.id}','selected_category',this.value)">
+          <option value="">カテゴリ</option>
+          ${catOpts}
+        </select>
+        <select class="item-ing-select" onchange="updateItem('${it.id}','ingredient_id',this.value)" ${!category?'disabled':''}>
+          <option value="">${category?'(食材を選択)':'(先にカテゴリを選択)'}</option>
+          ${ingOptsWithSelected}
+        </select>
+      </div>
       <button class="icon-del" onclick="removeItem('${it.id}')" title="削除">🗑</button>
     </div>
     <div class="item-row-fields">
@@ -402,6 +416,17 @@ function updateItem(id, key, value){
   if(key==='ingredient_id'){
     it.ingredient_id = value || null;
     it.price_override = null;
+    // 食材を選んだら category も更新
+    const ing = getIngredient(value);
+    if(ing) it.selected_category = ing.category;
+  } else if(key==='selected_category'){
+    it.selected_category = value || null;
+    // カテゴリ変更時、現食材が不一致ならリセット
+    const ing = getIngredient(it.ingredient_id);
+    if(ing && ing.category !== it.selected_category){
+      it.ingredient_id = null;
+      it.price_override = null;
+    }
   } else if(key==='grams'){
     it.grams = value==='' ? 0 : num(value);
   } else if(key==='price_override'){
