@@ -11,12 +11,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424l">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424l">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424l">
-<link rel="manifest" href="manifest.webmanifest?v=20260424l">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424m">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424m">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424m">
+<link rel="manifest" href="manifest.webmanifest?v=20260424m">
 <title>原価計算アプリ</title>
-<link rel="stylesheet" href="src/style.css?v=20260424l">
+<link rel="stylesheet" href="src/style.css?v=20260424m">
 </head>
 <body>
 <div class="app">
@@ -41,6 +41,7 @@
         <div class="hero-stamp" id="hero-stamp">–</div>
       </div>
       <div class="kpi-grid" id="dashboard-kpis"></div>
+      <div class="dash-extra" id="dashboard-extra"></div>
     </div>
   </div>
 
@@ -107,17 +108,100 @@
           <div class="summary-note" id="sum-note"></div>
         </div>
 
+        <!-- 販売価格シミュレーター (#2) -->
         <div class="section-card">
-          <div class="section-title">仕込みスケール</div>
+          <div class="section-title">販売価格シミュレーター</div>
+          <div class="grid-3">
+            <label>販売価格(円)<input type="number" id="edit-selling-price" step="1" value="0" oninput="recompute()"></label>
+            <label>目標原価率(%)<input type="number" id="edit-target-cr" step="0.1" value="30" oninput="recompute()"></label>
+            <label>目標粗利(円)<input type="number" id="edit-target-margin" step="1" value="0" oninput="recompute()"></label>
+          </div>
+          <div class="sim-grid">
+            <div class="sim-item"><div class="s-label">1人前 原価</div><div id="sim-cost" class="sim-val">–</div></div>
+            <div class="sim-item"><div class="s-label">販売価格</div><div id="sim-selling" class="sim-val">–</div></div>
+            <div class="sim-item"><div class="s-label">原価率</div><div id="sim-cr" class="sim-val">–</div></div>
+            <div class="sim-item"><div class="s-label">粗利額</div><div id="sim-margin" class="sim-val accent">–</div></div>
+            <div class="sim-item"><div class="s-label">粗利率</div><div id="sim-margin-ratio" class="sim-val">–</div></div>
+            <div class="sim-item"><div class="s-label">推奨販売価格(原価率)</div><div id="sim-sugg-by-ratio" class="sim-val accent">–</div></div>
+            <div class="sim-item"><div class="s-label">推奨販売価格(粗利)</div><div id="sim-sugg-by-margin" class="sim-val accent">–</div></div>
+          </div>
+          <div class="alert-box" id="sim-warning" style="display:none"></div>
+        </div>
+
+        <!-- 原価詳細 (#1) -->
+        <div class="section-card">
+          <div class="section-title">原価詳細(材料別・構成比・ロス込み)</div>
+          <div class="cost-detail-summary">
+            <div><span class="s-label">1人前原価</span> <span id="cd-ing-cost" class="accent">–</span></div>
+            <div><span class="s-label">ロス込み</span> <span id="cd-ing-cost-loss" class="warn-text">–</span></div>
+            <div><span class="s-label">1個あたり</span> <span id="cd-piece-cost">–</span> <span class="muted-sub" id="cd-piece-count"></span></div>
+            <div><span class="s-label">仕入重量</span> <span id="cd-mass">–</span></div>
+            <div><span class="s-label">ロス込仕入</span> <span id="cd-mass-loss">–</span></div>
+          </div>
+          <div class="ing-table-wrap">
+            <table class="ing-table compact">
+              <thead><tr><th>材料</th><th>使用g</th><th>仕入g</th><th>ロス込g</th><th>原価</th><th>構成比</th></tr></thead>
+              <tbody id="cost-detail-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 仕込みロット計算 (#5) -->
+        <div class="section-card">
+          <div class="section-title">仕込みロット計算</div>
           <div class="grid-3">
             <label>仕込む人前数<input type="number" id="scale-servings" step="1" value="1" oninput="recompute()"></label>
             <label class="readonly"><span>仕込み総重量</span><output id="scale-total-g">0 g</output></label>
             <label class="readonly"><span>仕込み総原価</span><output id="scale-total-cost">¥0</output></label>
           </div>
+          <div class="lot-summary">
+            <div><span class="s-label">人前数</span> <b id="lot-servings">0</b></div>
+            <div><span class="s-label">仕込み総重量</span> <b id="lot-mass-g">0</b></div>
+            <div><span class="s-label">ロス込み</span> <b id="lot-mass-loss-g" class="warn-text">0</b></div>
+            <div><span class="s-label">仕込み総原価</span> <b id="lot-cost" class="accent">¥0</b></div>
+            <div><span class="s-label">ロス込み原価</span> <b id="lot-cost-loss" class="warn-text">¥0</b></div>
+          </div>
+          <div class="ing-table-wrap">
+            <table class="ing-table compact">
+              <thead><tr><th>材料</th><th>必要量(使用)</th><th>必要仕入量</th><th>ロス込み</th></tr></thead>
+              <tbody id="lot-purchase-tbody"></tbody>
+            </table>
+          </div>
         </div>
 
-        <div class="action-row save-row">
-          <button class="primary-btn" onclick="saveCurrent()">💾 保存</button>
+        <!-- 餃子モード (#6) -->
+        <div class="section-card" id="gyoza-mode-card" style="display:none;">
+          <div class="section-title">🥟 餃子専用モード</div>
+          <div class="grid-3">
+            <label>1個重量(g)<input type="number" id="edit-piece-weight" step="0.1" value="17" oninput="recompute()"></label>
+            <label>1個あたり皮重量(g)<input type="number" id="edit-skin-weight" step="0.1" value="10" oninput="recompute()"></label>
+            <label class="readonly"><span>1個あたり餡量</span><output id="gz-an-per-piece">–</output></label>
+          </div>
+          <div class="gyoza-grid">
+            <div><span class="s-label">1人前個数</span> <b id="gz-pieces">–</b></div>
+            <div><span class="s-label">餡総量(1人前)</span> <b id="gz-an-total">–</b></div>
+            <div><span class="s-label">皮必要枚数</span> <b id="gz-skin-count">–</b></div>
+            <div><span class="s-label">1個あたり皮</span> <b id="gz-skin-per-piece">–</b></div>
+            <div><span class="s-label">皮単価/個</span> <b id="gz-skin-price-per-piece">–</b></div>
+            <div><span class="s-label">炭火焼鶏</span> <b id="gz-chicken-g">–</b></div>
+            <div><span class="s-label">豚ミンチ</span> <b id="gz-pork-g">–</b></div>
+            <div><span class="s-label">野菜(水抜き後)</span> <b id="gz-veg-after">–</b></div>
+            <div><span class="s-label">野菜(水抜き前)</span> <b id="gz-veg-before">–</b></div>
+            <div><span class="s-label">塩量</span> <b id="gz-salt">–</b></div>
+            <div><span class="s-label">1個原価</span> <b id="gz-cost-1" class="accent">–</b></div>
+            <div><span class="s-label">5個入り原価</span> <b id="gz-cost-5" class="accent">–</b></div>
+            <div><span class="s-label">10個入り原価</span> <b id="gz-cost-10" class="accent">–</b></div>
+          </div>
+          <div class="section-subtitle">販売価格別 粗利早見</div>
+          <table class="ing-table compact">
+            <thead><tr><th>パック</th><th>販売価格</th><th>原価</th><th>粗利</th><th>原価率</th></tr></thead>
+            <tbody id="gz-pack-tbody"></tbody>
+          </table>
+          <div class="muted-note">※ 補助タブの端材換算・水抜き計算・皮単価表も活用してください。</div>
+        </div>
+
+        <div class="action-row save-row sticky-save">
+          <button class="primary-btn big" onclick="saveCurrent()">💾 保存</button>
           <span class="save-stamp" id="save-stamp"></span>
         </div>
       </div>
@@ -142,6 +226,7 @@
             <option value="market">市場価格</option>
             <option value="purchase">仕入れ価格</option>
             <option value="spot">都度入力</option>
+            <option value="fixed">固定価格</option>
           </select>
           <input id="search-master" class="search-input" placeholder="食材名で検索" oninput="renderMaster()">
         </div>
@@ -153,7 +238,7 @@
           <button class="ghost-btn" onclick="seedSeasonings()">🧂 調味料(32)</button>
           <button class="ghost-btn" onclick="seedMaster()">🥟 餃子一式</button>
         </div>
-        <div class="muted-note">🟢 市場価格(週次等で更新) / 🔵 仕入れ価格(安定) / 🟠 都度入力(魚など変動大)</div>
+        <div class="muted-note">🟢 市場価格(週次等で更新) / 🔵 仕入れ価格(安定) / 🟠 都度入力(魚など変動大) / 🟣 固定価格(契約等)</div>
         <div id="master-list"></div>
       </div>
     </div>
@@ -226,12 +311,21 @@
     <!-- ============== 設定 ============== -->
     <div id="view-settings" style="display:none;">
       <div class="section-card">
-        <div class="section-title">データ</div>
+        <div class="section-title">データ バックアップ</div>
         <div class="action-row">
-          <button class="ghost-btn" onclick="exportAll()">📤 全データ書き出し(JSON)</button>
-          <label class="ghost-btn file-btn">📥 読み込み(JSON)<input type="file" accept="application/json" onchange="importAll(event)" hidden></label>
+          <button class="primary-btn" onclick="exportAll()">📤 全データ JSON書き出し</button>
+          <label class="ghost-btn file-btn">📥 JSON読み込み<input type="file" accept="application/json" onchange="importAll(event)" hidden></label>
         </div>
-        <div class="muted-note">食材マスタとレシピをまとめてバックアップできます。</div>
+        <div class="muted-note">食材マスタとレシピをまとめてバックアップ。読み込み時は重複チェック+既存追加/上書き選択可。</div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">CSV 書き出し</div>
+        <div class="action-row">
+          <button class="ghost-btn" onclick="exportIngredientsCSV()">🥬 食材マスタ CSV</button>
+          <button class="ghost-btn" onclick="exportRecipesCSV()">📋 レシピ CSV</button>
+          <button class="ghost-btn" onclick="exportCostResultsCSV()">💹 原価計算結果 CSV</button>
+        </div>
+        <div class="muted-note">Excel で開ける UTF-8 BOM 付き CSV。経理・店舗共有用。</div>
       </div>
       <div class="section-card">
         <div class="section-title">サンプル投入</div>
@@ -254,7 +348,7 @@
       </div>
       <div class="section-card">
         <div class="section-title">このアプリについて</div>
-        <div class="muted-note">原価計算アプリ v2.0.0 / 静的PWA / データはこの端末に保存</div>
+        <div class="muted-note">原価計算アプリ v3.0.0 / 静的PWA / データはこの端末に保存</div>
       </div>
     </div>
   </div>
@@ -281,9 +375,28 @@
         <option value="market">🟢 市場価格(野菜等)</option>
         <option value="purchase">🔵 仕入れ価格(安定)</option>
         <option value="spot">🟠 都度入力(魚等)</option>
+        <option value="fixed">🟣 固定価格(契約)</option>
       </select></label>
-      <label>kg単価(円)<input type="number" id="ing-price" step="1" placeholder="都度入力の場合は空欄可"></label>
+      <label>仕入単位<select id="ing-unit">
+        <option value="kg">kg</option>
+        <option value="L">L</option>
+        <option value="個">個</option>
+        <option value="枚">枚</option>
+        <option value="本">本</option>
+        <option value="袋">袋</option>
+      </select></label>
+      <label>仕入先<input type="text" id="ing-supplier" placeholder="(任意) 例: ○○商店"></label>
+      <label>基準価格(円/単位)<input type="number" id="ing-standard" step="0.01" placeholder="基準/定価"></label>
+      <label>実仕入価格(円/単位)<input type="number" id="ing-actual" step="0.01" placeholder="実際の仕入"></label>
+      <label>標準歩留まり(%)<input type="number" id="ing-yield" step="0.1" min="0" max="100" value="100"></label>
+      <label>ロス率(%)<input type="number" id="ing-loss" step="0.1" min="0" max="100" value="0" title="搬送・保管ロス等"></label>
+      <label class="full-width chip-row"><input type="checkbox" id="ing-variable"> 変動価格(都度確認)</label>
       <label class="full-width">メモ<input type="text" id="ing-memo" placeholder="(任意)"></label>
+      <label class="full-width readonly"><span>最終更新</span><output id="ing-last-updated">–</output></label>
+    </div>
+    <div class="history-section">
+      <div class="history-title">価格変更履歴</div>
+      <div id="ing-history-list"></div>
     </div>
     <div class="action-row save-row">
       <button class="ghost-btn" onclick="closeIngModal()">キャンセル</button>
@@ -292,6 +405,6 @@
   </div>
 </div>
 
-<script src="src/main.js?v=20260424l"></script>
+<script src="src/main.js?v=20260424m"></script>
 </body>
 </html>

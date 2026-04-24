@@ -3,12 +3,16 @@
 */
 
 const LS_KEY = 'genka_v2';
+const SCHEMA_VERSION = 3;
 const PRICE_TYPES = {
   market:   { label: '市場価格',   short: '市', color: '#3f8a5a', bg: '#e8f2ec' },
   purchase: { label: '仕入れ価格', short: '仕', color: '#3a6ba0', bg: '#e6eef7' },
   spot:     { label: '都度入力',   short: '都', color: '#c67b1d', bg: '#faefda' },
+  fixed:    { label: '固定価格',   short: '固', color: '#6b4fa0', bg: '#eee8f5' },
 };
 const INGREDIENT_CATS = ['肉','魚','野菜','調味料','皮','その他'];
+const UNITS = ['kg','L','個','枚','本','袋'];
+const STALE_DAYS = 30; // 価格未更新の日数閾値
 
 const state = {
   ingredients: [],
@@ -40,6 +44,33 @@ function loadState(){
 }
 
 function migrateLegacy(){
+  // 食材マスタの v3 フィールド補完
+  state.ingredients.forEach(i => {
+    if(i.standard_price === undefined) i.standard_price = num(i.kg_price, 0);
+    if(i.actual_purchase_price === undefined) i.actual_purchase_price = i.standard_price;
+    if(i.unit === undefined) i.unit = 'kg';
+    if(i.yield_rate === undefined) i.yield_rate = 1.0;
+    if(i.loss_rate === undefined) i.loss_rate = 0;
+    if(i.supplier_name === undefined) i.supplier_name = '';
+    if(i.last_updated === undefined) i.last_updated = i.updated_at || new Date().toISOString();
+    if(i.is_variable_price === undefined) i.is_variable_price = (i.price_type === 'spot');
+    if(!Array.isArray(i.price_history)) i.price_history = [];
+    // kg_price ↔ actual_purchase_price 同期(後方互換)
+    if(num(i.actual_purchase_price,0) === 0 && num(i.kg_price,0) > 0){
+      i.actual_purchase_price = num(i.kg_price);
+    }
+    if(num(i.standard_price,0) === 0 && num(i.kg_price,0) > 0){
+      i.standard_price = num(i.kg_price);
+    }
+  });
+  // レシピの v3 フィールド補完
+  state.recipes.forEach(r => {
+    if(r.selling_price === undefined) r.selling_price = 0;
+    if(r.target_cost_ratio === undefined) r.target_cost_ratio = 30;
+    if(r.target_margin === undefined) r.target_margin = 0;
+    if(r.piece_weight_g === undefined) r.piece_weight_g = 17;
+    if(r.skin_weight_per_piece === undefined) r.skin_weight_per_piece = 10;
+  });
   state.recipes.forEach(r => {
     // 皮を通常食材として items に追加
     if(r.skin_enabled && r.skin_ingredient_id && num(r.skin_g_per_serving) > 0){
@@ -102,14 +133,25 @@ function saveState(){
 
 // ============ モデル ============
 function makeIngredient(init){
+  const now = new Date().toISOString();
   return Object.assign({
     id: uid('ing'),
     name: '',
     category: '調味料',
     price_type: 'purchase',
-    kg_price: 0,
+    kg_price: 0,               // 後方互換: standard_price と連動
+    // v3 拡張フィールド
+    supplier_name: '',         // 仕入先名
+    standard_price: 0,         // 基準価格(マスタ定価)
+    actual_purchase_price: 0,  // 実仕入価格(ユーザー実績)
+    unit: 'kg',                // 購入単位
+    yield_rate: 1.0,           // 標準歩留まり(0-1)
+    loss_rate: 0,              // 標準ロス率(0-1) 搬送・保管ロス
+    last_updated: now,         // 価格最終更新日時
     memo: '',
-    updated_at: new Date().toISOString(),
+    is_variable_price: false,  // true=変動大・都度確認必要
+    price_history: [],         // [{date,from,to,supplier,memo}]
+    updated_at: now,
   }, init||{});
 }
 function makeRecipe(init){
@@ -119,6 +161,13 @@ function makeRecipe(init){
     category: '餃子',
     per_serving_desc: '',
     items: [],
+    // v3 拡張フィールド(販売価格シミュレーター)
+    selling_price: 0,          // 販売価格(1人前)
+    target_cost_ratio: 30,     // 目標原価率(%)
+    target_margin: 0,          // 目標粗利額(円)
+    // 餃子専用
+    piece_weight_g: 17,        // 1個重量(g)
+    skin_weight_per_piece: 10, // 1個あたり皮重量(g)
     updated_at: new Date().toISOString(),
   }, init||{});
 }
@@ -149,10 +198,20 @@ function effectivePrice(item){
   const ing = getIngredient(item.ingredient_id);
   if(!ing) return null;
   if(item.price_override != null && item.price_override !== '') return num(item.price_override);
+  // 実仕入価格 > 基準価格 > 旧kg_price の順にフォールバック
+  if(num(ing.actual_purchase_price,0) > 0) return num(ing.actual_purchase_price);
+  if(num(ing.standard_price,0) > 0) return num(ing.standard_price);
   return num(ing.kg_price);
 }
 function hasPriceOverride(item){
   return item.price_override != null && item.price_override !== '';
+}
+
+function parsePiecesFromDesc(desc){
+  // "5個" "10個入り" "3ピース" 等から個数を抽出
+  if(!desc) return null;
+  const m = String(desc).match(/(\d+(?:\.\d+)?)\s*(個|ピース|枚|粒)/);
+  return m ? parseFloat(m[1]) : null;
 }
 
 function calcRecipe(r){
@@ -163,19 +222,47 @@ function calcRecipe(r){
     const price = effectivePrice(it);
     const g = num(it.grams);
     const yp = num(it.yield_pct, 100);
-    const yield_rate = yp > 0 ? yp/100 : 1; // 0%は無効扱い
-    const raw_g = g / yield_rate; // 仕入が必要な量(歩留前重量)
+    const yield_rate = yp > 0 ? yp/100 : 1;
+    const raw_g = g / yield_rate; // 歩留前(仕入)重量
+    const loss_rate = ing ? num(ing.loss_rate, 0) : 0;
+    const raw_with_loss = raw_g * (1 + loss_rate); // ロス込み必要量
     const has_price = price != null && ing;
     const cost = has_price ? raw_g * (price/1000) : 0;
-    return { item: it, ingredient: ing, price, g, raw_g, yield_pct: yp, cost, has_price };
+    const cost_with_loss = has_price ? raw_with_loss * (price/1000) : 0;
+    return { item: it, ingredient: ing, price, g, raw_g, raw_with_loss, loss_rate, yield_pct: yp, cost, cost_with_loss, has_price };
   });
   const ing_cost = rows.reduce((s,x)=>s+x.cost, 0);
-  const total_g = rows.reduce((s,x)=>s+x.g, 0);   // 1人前出来上がり
-  const mass_g = rows.reduce((s,x)=>s+x.raw_g, 0); // 1人前 仕入必要量
+  const ing_cost_with_loss = rows.reduce((s,x)=>s+x.cost_with_loss, 0);
+  const total_g = rows.reduce((s,x)=>s+x.g, 0);
+  const mass_g = rows.reduce((s,x)=>s+x.raw_g, 0);
+  const mass_with_loss = rows.reduce((s,x)=>s+x.raw_with_loss, 0);
   const per_cost = ing_cost;
+  const per_cost_with_loss = ing_cost_with_loss;
   const mass_total = mass_g || 1;
-  rows.forEach(x => { x.mass_ratio = x.raw_g/mass_total; });
-  return {rows, ing_cost, total_g, mass_g, per_cost};
+  rows.forEach(x => {
+    x.mass_ratio = x.raw_g / mass_total;
+    x.cost_ratio = ing_cost > 0 ? x.cost / ing_cost : 0;
+  });
+  // #1 1個あたり原価(per_serving_desc から個数抽出)
+  const pieces = parsePiecesFromDesc(r.per_serving_desc);
+  const per_piece_cost = pieces ? per_cost / pieces : null;
+  // #2 販売価格シミュレーター
+  const selling = num(r.selling_price, 0);
+  const target_cr = num(r.target_cost_ratio, 30) / 100;
+  const target_margin = num(r.target_margin, 0);
+  const cost_ratio = selling > 0 ? per_cost / selling : 0;
+  const margin = selling - per_cost;
+  const margin_ratio = selling > 0 ? margin / selling : 0;
+  const suggested_price_by_ratio = target_cr > 0 ? per_cost / target_cr : 0;
+  const suggested_price_by_margin = per_cost + target_margin;
+  const over_target = selling > 0 && cost_ratio > target_cr;
+  return {
+    rows, ing_cost, total_g, mass_g, per_cost, per_piece_cost, pieces,
+    ing_cost_with_loss, per_cost_with_loss, mass_with_loss,
+    selling, cost_ratio, margin, margin_ratio,
+    suggested_price_by_ratio, suggested_price_by_margin,
+    target_cost_ratio: target_cr, target_margin, over_target,
+  };
 }
 
 // ============ タブ制御 ============
@@ -197,16 +284,55 @@ function showTab(tab){
 function renderHero(){
   const recipes = state.recipes.length;
   const ings = state.ingredients.length;
-  const costs = state.recipes.map(r=>calcRecipe(r).per_cost).filter(n=>n>0);
-  const avg = costs.length?costs.reduce((a,b)=>a+b,0)/costs.length:0;
-  const max = costs.length?Math.max(...costs):0;
+  const calcs = state.recipes.map(r=>({r, c:calcRecipe(r)})).filter(x=>x.c);
+  const withSelling = calcs.filter(x=>x.c.selling>0);
+  const avgCR = withSelling.length ? withSelling.reduce((s,x)=>s+x.c.cost_ratio,0)/withSelling.length : 0;
+  const top5CR = [...withSelling].sort((a,b)=>b.c.cost_ratio-a.c.cost_ratio).slice(0,5);
+  const top5Margin = [...withSelling].sort((a,b)=>b.c.margin-a.c.margin).slice(0,5);
+  // 価格未更新 (STALE_DAYS 以上前)
+  const staleThreshold = Date.now() - STALE_DAYS*24*3600*1000;
+  const stale = state.ingredients.filter(i => {
+    const t = Date.parse(i.last_updated || i.updated_at || 0);
+    return isFinite(t) && t < staleThreshold;
+  });
+  // 都度入力
+  const variable = state.ingredients.filter(i => i.is_variable_price || i.price_type === 'spot');
+
   document.getElementById('dashboard-kpis').innerHTML = `
     <div class="kpi"><div class="kpi-label">レシピ</div><div class="kpi-value">${recipes}</div></div>
-    <div class="kpi"><div class="kpi-label">登録食材</div><div class="kpi-value">${ings}</div></div>
-    <div class="kpi"><div class="kpi-label">平均1人前</div><div class="kpi-value accent">¥${fmt(avg,0)}</div></div>
-    <div class="kpi"><div class="kpi-label">最高1人前</div><div class="kpi-value accent">¥${fmt(max,0)}</div></div>
+    <div class="kpi"><div class="kpi-label">食材マスタ</div><div class="kpi-value">${ings}</div></div>
+    <div class="kpi"><div class="kpi-label">平均原価率</div><div class="kpi-value accent">${withSelling.length?fmt(avgCR*100,1)+'%':'–'}</div></div>
+    <div class="kpi"><div class="kpi-label">価格未更新</div><div class="kpi-value ${stale.length?'warn':''}">${stale.length}</div></div>
+    <div class="kpi"><div class="kpi-label">都度入力</div><div class="kpi-value ${variable.length?'accent':''}">${variable.length}</div></div>
   `;
+  // 拡張ダッシュボード(TOP5・未更新リスト)
+  const extraWrap = document.getElementById('dashboard-extra');
+  if(extraWrap){
+    const crBlock = top5CR.length ? `<div class="dash-block">
+      <div class="dash-block-title">📈 原価率が高いレシピ TOP5</div>
+      <ol class="dash-list">${top5CR.map(x=>`<li><a onclick="openRecipe('${x.r.id}')">${esc(x.r.name)}</a><span class="dash-val ${x.c.over_target?'warn':''}">${fmt(x.c.cost_ratio*100,1)}%</span></li>`).join('')}</ol>
+    </div>` : '';
+    const marginBlock = top5Margin.length ? `<div class="dash-block">
+      <div class="dash-block-title">💰 粗利額が高いレシピ TOP5</div>
+      <ol class="dash-list">${top5Margin.map(x=>`<li><a onclick="openRecipe('${x.r.id}')">${esc(x.r.name)}</a><span class="dash-val accent">¥${fmt(x.c.margin,0)}</span></li>`).join('')}</ol>
+    </div>` : '';
+    const staleBlock = stale.length ? `<div class="dash-block">
+      <div class="dash-block-title">⏰ 価格未更新の食材 (${STALE_DAYS}日以上)</div>
+      <ul class="dash-list">${stale.slice(0,8).map(i=>`<li><a onclick="openIngModal('${i.id}')">${esc(i.name)}</a><span class="dash-val muted">${daysAgo(i.last_updated)}日前</span></li>`).join('')}${stale.length>8?`<li class="muted">他 ${stale.length-8}件</li>`:''}</ul>
+    </div>` : '';
+    const varBlock = variable.length ? `<div class="dash-block">
+      <div class="dash-block-title">🟠 都度入力が必要な食材</div>
+      <ul class="dash-list">${variable.slice(0,8).map(i=>`<li><a onclick="openIngModal('${i.id}')">${esc(i.name)}</a><span class="dash-val muted">¥${fmt(i.actual_purchase_price||i.kg_price,0)}/kg</span></li>`).join('')}${variable.length>8?`<li class="muted">他 ${variable.length-8}件</li>`:''}</ul>
+    </div>` : '';
+    extraWrap.innerHTML = crBlock + marginBlock + staleBlock + varBlock;
+  }
   document.getElementById('hero-stamp').textContent = recipes ? `${recipes}レシピ / ${ings}食材 / ${nowStamp()}` : 'データ未登録';
+}
+
+function daysAgo(iso){
+  const t = Date.parse(iso||0);
+  if(!isFinite(t)) return '?';
+  return Math.max(0, Math.floor((Date.now()-t)/(24*3600*1000)));
 }
 
 // ============ レシピ一覧 ============
@@ -235,13 +361,22 @@ function renderRecipeList(){
     const c = calcRecipe(r);
     const sel = state.selectedListId===r.id?' selected':'';
     const unit = r.per_serving_desc ? `/${esc(r.per_serving_desc)}` : '/人前';
-    return `<div class="recipe-card${sel}" onclick="openRecipe('${r.id}')" oncontextmenu="selectInList(event,'${r.id}')">
-      <div class="rc-cat">${esc(r.category||'-')}</div>
+    const crBadge = c.selling>0
+      ? `<div class="rc-cr-badge ${c.over_target?'warn':'ok'}">原価率 ${fmt(c.cost_ratio*100,1)}%</div>`
+      : '';
+    const marginInfo = c.selling>0
+      ? `<div>粗利 <b>¥${fmt(c.margin,0)}</b></div>`
+      : '';
+    return `<div class="recipe-card${sel}${c.over_target?' over-target':''}" onclick="openRecipe('${r.id}')" oncontextmenu="selectInList(event,'${r.id}')">
+      <div class="rc-top-row">
+        <div class="rc-cat">${esc(r.category||'-')}</div>
+        ${crBadge}
+      </div>
       <div class="rc-name">${esc(r.name||'(無題)')}</div>
       <div class="rc-stats">
         <div>材料 <b>${r.items.length}</b></div>
         <div>1人前 <b>¥${fmt(c.per_cost,0)}</b>${unit}</div>
-        <div>重量 <b>${fmt(c.total_g,1)}g</b></div>
+        ${marginInfo}
       </div>
     </div>`;
   }).join('');
@@ -279,6 +414,7 @@ function duplicateSelected(){
 function openRecipe(id){
   const r = getRecipe(id);
   if(!r) return;
+  showTab('recipes');
   state.currentRecipeId = id;
   document.getElementById('recipe-list-pane').style.display = 'none';
   document.getElementById('recipe-edit-pane').style.display = '';
@@ -286,7 +422,20 @@ function openRecipe(id){
   document.getElementById('edit-category').value = r.category;
   document.getElementById('edit-serving-desc').value = r.per_serving_desc||'';
   document.getElementById('scale-servings').value = 1;
+  // 販売価格シミュレーター
+  const spInput = document.getElementById('edit-selling-price');
+  if(spInput) spInput.value = num(r.selling_price, 0);
+  const tcrInput = document.getElementById('edit-target-cr');
+  if(tcrInput) tcrInput.value = num(r.target_cost_ratio, 30);
+  const tmInput = document.getElementById('edit-target-margin');
+  if(tmInput) tmInput.value = num(r.target_margin, 0);
+  // 餃子モード
+  const pwInput = document.getElementById('edit-piece-weight');
+  if(pwInput) pwInput.value = num(r.piece_weight_g, 17);
+  const swInput = document.getElementById('edit-skin-weight');
+  if(swInput) swInput.value = num(r.skin_weight_per_piece, 10);
   document.getElementById('save-stamp').textContent = r.updated_at ? `最終保存 ${new Date(r.updated_at).toLocaleString('ja-JP')}` : '';
+  toggleGyozaMode();
   renderItems();
   recompute();
 }
@@ -320,6 +469,23 @@ function writeBackForm(r){
   r.name = document.getElementById('edit-name').value || '(無題)';
   r.category = document.getElementById('edit-category').value;
   r.per_serving_desc = document.getElementById('edit-serving-desc').value || '';
+  const sp = document.getElementById('edit-selling-price');
+  if(sp) r.selling_price = num(sp.value, 0);
+  const tcr = document.getElementById('edit-target-cr');
+  if(tcr) r.target_cost_ratio = num(tcr.value, 30);
+  const tm = document.getElementById('edit-target-margin');
+  if(tm) r.target_margin = num(tm.value, 0);
+  const pw = document.getElementById('edit-piece-weight');
+  if(pw) r.piece_weight_g = num(pw.value, 17);
+  const sw = document.getElementById('edit-skin-weight');
+  if(sw) r.skin_weight_per_piece = num(sw.value, 10);
+}
+
+function toggleGyozaMode(){
+  const sel = document.getElementById('edit-category');
+  const card = document.getElementById('gyoza-mode-card');
+  if(!sel || !card) return;
+  card.style.display = sel.value === '餃子' ? '' : 'none';
 }
 
 function buildIngredientOptionsFiltered(category){
@@ -464,19 +630,159 @@ function recompute(){
   const r = getCurrent(); if(!r) return;
   writeBackForm(r);
   const c = calcRecipe(r);
+  toggleGyozaMode();
+  // 集計カード
   document.getElementById('sum-per-cost').textContent = fmt(c.per_cost,0);
   document.getElementById('sum-total-g').textContent = fmt(c.total_g,1);
   document.getElementById('sum-item-count').textContent = r.items.length;
   document.getElementById('sum-mass-g').textContent = fmt(c.mass_g,1);
   const unlinked = c.rows.filter(x=>!x.ingredient).length;
-  const nopriceCnt = c.rows.filter(x=>!x.has_price).length;
   const note = [`合計 ¥${fmt(c.per_cost,2)}`];
+  if(c.per_piece_cost) note.push(`1個あたり ¥${fmt(c.per_piece_cost,2)}`);
   if(unlinked) note.push(`⚠ 未選択 ${unlinked}件`);
   document.getElementById('sum-note').textContent = note.join(' / ');
-
+  // 仕込みスケール
   const servings = num(document.getElementById('scale-servings').value, 1);
   document.getElementById('scale-total-g').value = fmt(c.total_g*servings,1) + ' g';
   document.getElementById('scale-total-cost').value = '¥'+fmt(c.per_cost*servings,0);
+  // 新UI: 原価詳細 / 販売価格シミュレーター / 仕込みロット / 餃子モード
+  renderCostDetail(r, c);
+  renderPriceSim(r, c);
+  renderLotCalc(r, c);
+  renderGyozaMode(r, c);
+}
+
+// #1 原価詳細: 材料別原価・構成比・ロス込み
+function renderCostDetail(r, c){
+  const wrap = document.getElementById('cost-detail-tbody');
+  if(!wrap) return;
+  if(!c.rows.length){
+    wrap.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center">材料がありません</td></tr>';
+  } else {
+    wrap.innerHTML = c.rows.map(x => {
+      const name = x.ingredient ? esc(x.ingredient.name) : '<span class="muted">(未選択)</span>';
+      return `<tr>
+        <td style="text-align:left">${name}</td>
+        <td>${fmt(x.g,1)}</td>
+        <td>${fmt(x.raw_g,1)}</td>
+        <td>${fmt(x.raw_with_loss,1)}</td>
+        <td>¥${fmt(x.cost,2)}</td>
+        <td>${fmt(x.cost_ratio*100,1)}%</td>
+      </tr>`;
+    }).join('');
+  }
+  const setText = (id, v) => { const el=document.getElementById(id); if(el) el.textContent = v; };
+  setText('cd-ing-cost', '¥'+fmt(c.ing_cost, 2));
+  setText('cd-ing-cost-loss', '¥'+fmt(c.ing_cost_with_loss, 2));
+  setText('cd-mass', fmt(c.mass_g,1)+' g');
+  setText('cd-mass-loss', fmt(c.mass_with_loss,1)+' g');
+  setText('cd-piece-cost', c.per_piece_cost!=null ? '¥'+fmt(c.per_piece_cost,2) : '–');
+  setText('cd-piece-count', c.pieces!=null ? fmt(c.pieces,0)+'個/人前' : '未指定');
+}
+
+// #2 販売価格シミュレーター
+function renderPriceSim(r, c){
+  const setText = (id, v, cls) => { const el=document.getElementById(id); if(el){ el.textContent = v; if(cls!==undefined) el.className = cls; } };
+  setText('sim-cost', '¥'+fmt(c.per_cost,2));
+  setText('sim-selling', c.selling>0?'¥'+fmt(c.selling,0):'未設定');
+  setText('sim-cr', c.selling>0?fmt(c.cost_ratio*100,1)+'%':'–', 'sim-val '+(c.over_target?'warn':'ok'));
+  setText('sim-margin', c.selling>0?'¥'+fmt(c.margin,2):'–', 'sim-val '+(c.margin<0?'warn':'accent'));
+  setText('sim-margin-ratio', c.selling>0?fmt(c.margin_ratio*100,1)+'%':'–');
+  setText('sim-sugg-by-ratio', c.suggested_price_by_ratio>0?'¥'+fmt(c.suggested_price_by_ratio,0):'–');
+  setText('sim-sugg-by-margin', c.suggested_price_by_margin>0?'¥'+fmt(c.suggested_price_by_margin,0):'–');
+  const warnEl = document.getElementById('sim-warning');
+  if(warnEl){
+    if(c.over_target){
+      warnEl.style.display = '';
+      warnEl.textContent = `⚠ 原価率が目標(${fmt(c.target_cost_ratio*100,1)}%)を超えています。推奨販売価格: ¥${fmt(c.suggested_price_by_ratio,0)}`;
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
+}
+
+// #5 仕込みロット計算 (仕入必要量リスト付き)
+function renderLotCalc(r, c){
+  const wrap = document.getElementById('lot-purchase-tbody');
+  if(!wrap) return;
+  const servings = num(document.getElementById('scale-servings').value, 1);
+  const setText = (id, v) => { const el=document.getElementById(id); if(el) el.textContent = v; };
+  setText('lot-servings', fmt(servings,0));
+  setText('lot-mass-g', fmt(c.mass_g*servings,1)+' g');
+  setText('lot-mass-loss-g', fmt(c.mass_with_loss*servings,1)+' g');
+  setText('lot-cost', '¥'+fmt(c.per_cost*servings,0));
+  setText('lot-cost-loss', '¥'+fmt(c.per_cost_with_loss*servings,0));
+  if(!c.rows.length){
+    wrap.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center">材料がありません</td></tr>';
+    return;
+  }
+  wrap.innerHTML = c.rows.map(x => {
+    const name = x.ingredient ? esc(x.ingredient.name) : '<span class="muted">(未選択)</span>';
+    return `<tr>
+      <td style="text-align:left">${name}</td>
+      <td>${fmt(x.g*servings,1)}</td>
+      <td>${fmt(x.raw_g*servings,1)}</td>
+      <td>${fmt(x.raw_with_loss*servings,1)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// #6 餃子専用モード
+function renderGyozaMode(r, c){
+  const card = document.getElementById('gyoza-mode-card');
+  if(!card || card.style.display==='none') return;
+  const setText = (id, v) => { const el=document.getElementById(id); if(el) el.textContent = v; };
+  const pw = num(r.piece_weight_g, 17);
+  const sw = num(r.skin_weight_per_piece, 10);
+  const pieces = c.pieces || 5;
+  const anPerPiece = Math.max(0, pw - sw);
+  // 1人前の餡総量と皮枚数
+  const skin_per_serving_g = sw * pieces;
+  const an_per_serving_g = anPerPiece * pieces;
+  // 皮食材の検出
+  const skinRow = c.rows.find(x => x.ingredient && x.ingredient.category === '皮');
+  const skin_price_per_piece = skinRow && skinRow.price ? sw * (skinRow.price/1000) : 0;
+  // 材料の特定カテゴリ使用量合計(1人前)
+  const sumByName = (needle) => c.rows.filter(x => x.ingredient && x.ingredient.name.includes(needle)).reduce((s,x)=>s+x.g,0);
+  const chicken_g = sumByName('地頭鶏') + sumByName('炭火焼');
+  const pork_g = sumByName('豚ミンチ') + sumByName('豚肉');
+  // 野菜水抜き前後(脱水対象=歩留<100%の野菜)
+  const vegRows = c.rows.filter(x => x.ingredient && x.ingredient.category === '野菜');
+  const veg_after_g = vegRows.reduce((s,x)=>s+x.g, 0);
+  const veg_before_g = vegRows.reduce((s,x)=>s+x.raw_g, 0);
+  // 塩量(塩食材の使用量)
+  const saltRow = c.rows.find(x => x.ingredient && /塩/.test(x.ingredient.name));
+  const salt_g = saltRow ? saltRow.g : 0;
+  // 1個あたり原価・パック別
+  const costPerPiece = c.per_piece_cost || (c.per_cost / Math.max(1, pieces));
+  setText('gz-pieces', fmt(pieces,0));
+  setText('gz-an-per-piece', fmt(anPerPiece,1)+' g');
+  setText('gz-skin-per-piece', fmt(sw,1)+' g');
+  setText('gz-skin-price-per-piece', '¥'+fmt(skin_price_per_piece,2));
+  setText('gz-an-total', fmt(an_per_serving_g,1)+' g');
+  setText('gz-skin-count', fmt(pieces,0)+' 枚');
+  setText('gz-chicken-g', fmt(chicken_g,1)+' g');
+  setText('gz-pork-g', fmt(pork_g,1)+' g');
+  setText('gz-veg-after', fmt(veg_after_g,1)+' g');
+  setText('gz-veg-before', fmt(veg_before_g,1)+' g');
+  setText('gz-salt', fmt(salt_g,2)+' g');
+  setText('gz-cost-1', '¥'+fmt(costPerPiece,2));
+  setText('gz-cost-5', '¥'+fmt(costPerPiece*5,0));
+  setText('gz-cost-10', '¥'+fmt(costPerPiece*10,0));
+  // 販売価格別粗利
+  const sellPerPiece = c.selling>0 && pieces>0 ? c.selling/pieces : 0;
+  const packs = [5,6,8,10,12];
+  const packPrices = [500,600,800,1000,1500];
+  const tbody = document.getElementById('gz-pack-tbody');
+  if(tbody){
+    tbody.innerHTML = packs.map((p, idx) => {
+      const sp = packPrices[idx];
+      const cost = costPerPiece * p;
+      const margin = sp - cost;
+      const cr = sp>0 ? cost/sp : 0;
+      return `<tr><td>${p}個入り</td><td>¥${fmt(sp,0)}</td><td>¥${fmt(cost,1)}</td><td>¥${fmt(margin,1)}</td><td>${fmt(cr*100,1)}%</td></tr>`;
+    }).join('');
+  }
 }
 
 // ============ 食材マスタ ============
@@ -508,14 +814,26 @@ function renderMaster(){
 function renderIngredientRow(i){
   const t = PRICE_TYPES[i.price_type]||{};
   const used = state.recipes.reduce((s,r)=>s+r.items.filter(it=>it.ingredient_id===i.id).length, 0);
-  return `<div class="ing-row">
+  const actual = num(i.actual_purchase_price, i.kg_price||0);
+  const std = num(i.standard_price, i.kg_price||0);
+  const priceText = (actual !== std && std>0)
+    ? `<span class="ing-price">¥${fmt(actual,0)}/${i.unit||'kg'}</span><span class="muted-sub">(基準¥${fmt(std,0)})</span>`
+    : `<span class="ing-price">¥${fmt(actual||std,0)}/${i.unit||'kg'}</span>`;
+  const days = daysAgo(i.last_updated);
+  const stale = (typeof days==='number' && days >= STALE_DAYS);
+  const variable = i.is_variable_price ? '<span class="variable-tag">変動大</span>' : '';
+  const supplier = i.supplier_name ? `<span class="ing-supplier">📦 ${esc(i.supplier_name)}</span>` : '';
+  return `<div class="ing-row${stale?' stale':''}">
     <div class="ing-row-main">
       <span class="price-badge" style="background:${t.bg};color:${t.color}">${t.short||''}</span>
       <span class="ing-name">${esc(i.name)}</span>
+      ${variable}
     </div>
     <div class="ing-row-meta">
-      <span class="ing-price">¥${fmt(i.kg_price,0)}/kg</span>
+      ${priceText}
+      ${supplier}
       ${i.memo?`<span class="ing-memo">${esc(i.memo)}</span>`:''}
+      <span class="ing-updated${stale?' warn':''}">${isFinite(days)?days+'日前':'–'}</span>
       ${used>0?`<span class="ing-used">使用中 ${used}件</span>`:'<span class="ing-unused">未使用</span>'}
     </div>
     <div class="ing-row-actions">
@@ -525,15 +843,43 @@ function renderIngredientRow(i){
   </div>`;
 }
 
+function fillIngModal(i){
+  document.getElementById('ing-name').value = i?.name || '';
+  document.getElementById('ing-category').value = i?.category || '野菜';
+  document.getElementById('ing-type').value = i?.price_type || 'market';
+  document.getElementById('ing-supplier').value = i?.supplier_name || '';
+  document.getElementById('ing-unit').value = i?.unit || 'kg';
+  document.getElementById('ing-standard').value = i?.standard_price ?? (i?.kg_price ?? '');
+  document.getElementById('ing-actual').value = i?.actual_purchase_price ?? (i?.kg_price ?? '');
+  document.getElementById('ing-yield').value = i ? Math.round((i.yield_rate ?? 1)*1000)/10 : 100;
+  document.getElementById('ing-loss').value = i ? Math.round((i.loss_rate ?? 0)*1000)/10 : 0;
+  document.getElementById('ing-variable').checked = !!(i?.is_variable_price);
+  document.getElementById('ing-memo').value = i?.memo || '';
+  document.getElementById('ing-last-updated').textContent = i?.last_updated ? new Date(i.last_updated).toLocaleString('ja-JP') : '(新規)';
+  renderPriceHistory(i);
+}
+
+function renderPriceHistory(i){
+  const wrap = document.getElementById('ing-history-list');
+  if(!wrap) return;
+  const hist = (i?.price_history||[]).slice().reverse();
+  if(!hist.length){
+    wrap.innerHTML = '<div class="muted small">価格変更履歴はまだありません</div>';
+    return;
+  }
+  wrap.innerHTML = hist.slice(0,10).map(h => `<div class="history-row">
+    <span class="hist-date">${esc(new Date(h.date).toLocaleDateString('ja-JP'))}</span>
+    <span class="hist-change">¥${fmt(h.from,0)} → <b>¥${fmt(h.to,0)}</b></span>
+    ${h.supplier?`<span class="hist-supplier">${esc(h.supplier)}</span>`:''}
+    ${h.memo?`<span class="hist-memo">${esc(h.memo)}</span>`:''}
+  </div>`).join('');
+}
+
 function addIngredient(){
   state.ingModalMode = 'add';
   state.ingModalId = null;
   document.getElementById('ing-modal-title').textContent = '食材を追加';
-  document.getElementById('ing-name').value = '';
-  document.getElementById('ing-category').value = '野菜';
-  document.getElementById('ing-type').value = 'market';
-  document.getElementById('ing-price').value = '';
-  document.getElementById('ing-memo').value = '';
+  fillIngModal(null);
   document.getElementById('ing-modal').style.display = 'flex';
   setTimeout(()=>document.getElementById('ing-name').focus(), 50);
 }
@@ -542,12 +888,9 @@ function openIngModal(id){
   const i = getIngredient(id); if(!i) return;
   state.ingModalMode = 'edit';
   state.ingModalId = id;
+  showTab('master');
   document.getElementById('ing-modal-title').textContent = '食材を編集';
-  document.getElementById('ing-name').value = i.name;
-  document.getElementById('ing-category').value = i.category;
-  document.getElementById('ing-type').value = i.price_type;
-  document.getElementById('ing-price').value = i.kg_price;
-  document.getElementById('ing-memo').value = i.memo||'';
+  fillIngModal(i);
   document.getElementById('ing-modal').style.display = 'flex';
 }
 
@@ -561,18 +904,49 @@ function closeIngModalBg(e){
 function saveIngModal(){
   const name = document.getElementById('ing-name').value.trim();
   if(!name){ alert('食材名を入力してください'); return; }
+  const now = new Date().toISOString();
   const data = {
     name,
     category: document.getElementById('ing-category').value,
     price_type: document.getElementById('ing-type').value,
-    kg_price: num(document.getElementById('ing-price').value),
+    supplier_name: document.getElementById('ing-supplier').value.trim(),
+    unit: document.getElementById('ing-unit').value,
+    standard_price: num(document.getElementById('ing-standard').value, 0),
+    actual_purchase_price: num(document.getElementById('ing-actual').value, 0),
+    yield_rate: Math.max(0, Math.min(1, num(document.getElementById('ing-yield').value, 100)/100)),
+    loss_rate: Math.max(0, Math.min(1, num(document.getElementById('ing-loss').value, 0)/100)),
+    is_variable_price: !!document.getElementById('ing-variable').checked,
     memo: document.getElementById('ing-memo').value.trim(),
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   };
+  // 後方互換: kg_price も同期
+  data.kg_price = data.actual_purchase_price || data.standard_price;
+
   if(state.ingModalMode==='edit' && state.ingModalId){
     const i = getIngredient(state.ingModalId);
-    if(i) Object.assign(i, data);
+    if(i){
+      const oldActual = num(i.actual_purchase_price, i.kg_price);
+      const newActual = data.actual_purchase_price;
+      if(oldActual !== newActual && oldActual > 0){
+        // #4 価格履歴に記録
+        i.price_history = i.price_history || [];
+        i.price_history.push({
+          date: now,
+          from: oldActual,
+          to: newActual,
+          supplier: data.supplier_name,
+          memo: data.memo,
+        });
+        data.last_updated = now;
+      } else if(!i.last_updated){
+        data.last_updated = i.updated_at || now;
+      } else {
+        data.last_updated = i.last_updated;
+      }
+      Object.assign(i, data);
+    }
   } else {
+    data.last_updated = now;
     state.ingredients.push(makeIngredient(data));
   }
   saveState();
@@ -580,7 +954,6 @@ function saveIngModal(){
   renderMaster();
   renderHero();
   if(getCurrent()){
-    populateIngredientSelects();
     renderItems();
     recompute();
   }
@@ -652,14 +1025,94 @@ function calcEmulsion(){
 }
 
 // ============ 設定 ============
-function exportAll(){
-  const data = {version:2,ingredients:state.ingredients,recipes:state.recipes,exported_at:new Date().toISOString()};
-  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+function downloadBlob(blob, filename){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href=url; a.download=`genka-${new Date().toISOString().slice(0,10)}.json`;
+  a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
+}
+
+function csvCell(v){
+  if(v==null) return '';
+  const s = String(v);
+  return /[,"\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+function csvLine(arr){ return arr.map(csvCell).join(','); }
+
+function exportAll(){
+  const data = {version:SCHEMA_VERSION,ingredients:state.ingredients,recipes:state.recipes,exported_at:new Date().toISOString()};
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  downloadBlob(blob, `genka-${new Date().toISOString().slice(0,10)}.json`);
+}
+
+function exportIngredientsCSV(){
+  const header = ['id','name','category','price_type','supplier_name','unit','standard_price','actual_purchase_price','yield_rate','loss_rate','is_variable_price','last_updated','memo'];
+  const lines = [csvLine(header)];
+  state.ingredients.forEach(i => {
+    lines.push(csvLine([
+      i.id, i.name, i.category, i.price_type, i.supplier_name||'',
+      i.unit||'kg',
+      num(i.standard_price, i.kg_price||0).toFixed(3),
+      num(i.actual_purchase_price, i.kg_price||0).toFixed(3),
+      num(i.yield_rate,1).toFixed(3),
+      num(i.loss_rate,0).toFixed(3),
+      i.is_variable_price ? 'true':'false',
+      i.last_updated||'',
+      i.memo||'',
+    ]));
+  });
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  downloadBlob(blob, `ingredients-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function exportRecipesCSV(){
+  const header = ['recipe_id','recipe_name','category','per_serving_desc','selling_price','target_cost_ratio','target_margin','item_id','ingredient_name','grams','yield_pct','price_override','selected_category'];
+  const lines = [csvLine(header)];
+  state.recipes.forEach(r => {
+    if(!r.items.length){
+      lines.push(csvLine([r.id,r.name,r.category,r.per_serving_desc||'',num(r.selling_price,0),num(r.target_cost_ratio,30),num(r.target_margin,0),'','','','','','']));
+      return;
+    }
+    r.items.forEach(it => {
+      const ing = getIngredient(it.ingredient_id);
+      lines.push(csvLine([
+        r.id, r.name, r.category, r.per_serving_desc||'',
+        num(r.selling_price,0), num(r.target_cost_ratio,30), num(r.target_margin,0),
+        it.id, ing?ing.name:'', num(it.grams,0).toFixed(3),
+        num(it.yield_pct,100), it.price_override??'', it.selected_category||'',
+      ]));
+    });
+  });
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  downloadBlob(blob, `recipes-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function exportCostResultsCSV(){
+  const header = ['recipe_id','recipe_name','category','per_serving_desc','pieces','per_cost','per_piece_cost','ing_cost_with_loss','mass_g','mass_with_loss','selling_price','cost_ratio_pct','margin','margin_ratio_pct','suggested_price_by_ratio','suggested_price_by_margin','target_cost_ratio_pct','over_target'];
+  const lines = [csvLine(header)];
+  state.recipes.forEach(r => {
+    const c = calcRecipe(r);
+    lines.push(csvLine([
+      r.id, r.name, r.category, r.per_serving_desc||'',
+      c.pieces||'',
+      num(c.per_cost,0).toFixed(2),
+      c.per_piece_cost!=null ? num(c.per_piece_cost,0).toFixed(2) : '',
+      num(c.ing_cost_with_loss,0).toFixed(2),
+      num(c.mass_g,0).toFixed(1),
+      num(c.mass_with_loss,0).toFixed(1),
+      num(c.selling,0),
+      num(c.cost_ratio*100,0).toFixed(1),
+      num(c.margin,0).toFixed(2),
+      num(c.margin_ratio*100,0).toFixed(1),
+      num(c.suggested_price_by_ratio,0).toFixed(0),
+      num(c.suggested_price_by_margin,0).toFixed(0),
+      num(c.target_cost_ratio*100,0).toFixed(1),
+      c.over_target?'true':'false',
+    ]));
+  });
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  downloadBlob(blob, `cost-results-${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 function importAll(ev){
@@ -671,16 +1124,45 @@ function importAll(ev){
       const ings = Array.isArray(p.ingredients)?p.ingredients:[];
       const recs = Array.isArray(p.recipes)?p.recipes:[];
       if(!ings.length && !recs.length){ alert('有効なデータが見つかりません'); return; }
-      if(!confirm(`食材${ings.length}件 / レシピ${recs.length}件 を読み込みます。既存データに追加しますか？(キャンセルで上書き)`)){
+      // 重複チェック: 食材名/レシピ名で突合
+      const existingIngNames = new Set(state.ingredients.map(i=>i.name));
+      const existingRecNames = new Set(state.recipes.map(r=>r.name));
+      const dupIngs = ings.filter(i=>existingIngNames.has(i.name));
+      const dupRecs = recs.filter(r=>existingRecNames.has(r.name));
+      const preview = [
+        `📥 読み込みプレビュー`,
+        ``,
+        `食材: ${ings.length}件 (重複 ${dupIngs.length}件)`,
+        dupIngs.length ? ` 重複例: ${dupIngs.slice(0,3).map(i=>i.name).join(', ')}${dupIngs.length>3?' ...':''}` : '',
+        `レシピ: ${recs.length}件 (重複 ${dupRecs.length}件)`,
+        dupRecs.length ? ` 重複例: ${dupRecs.slice(0,3).map(r=>r.name).join(', ')}${dupRecs.length>3?' ...':''}` : '',
+        ``,
+        `OK = 既存に追加 (重複はスキップ)`,
+        `キャンセル = 全て上書き(既存データは削除)`,
+      ].filter(Boolean).join('\n');
+      const addMode = confirm(preview);
+      if(addMode){
+        // 重複スキップで追加
+        let addI=0, addR=0;
+        ings.forEach(i => {
+          if(!existingIngNames.has(i.name)){ state.ingredients.push(i); addI++; }
+        });
+        recs.forEach(r => {
+          if(!existingRecNames.has(r.name)){ state.recipes.push(r); addR++; }
+        });
+        migrateLegacy();
+        saveState();
+        renderHero(); renderMaster(); renderRecipeList();
+        alert(`読み込み完了\n食材: ${addI}件追加 (${ings.length-addI}件スキップ)\nレシピ: ${addR}件追加 (${recs.length-addR}件スキップ)`);
+      } else {
+        if(!confirm('⚠ 既存データを全て削除して上書きします。本当によろしいですか？')){ return; }
         state.ingredients = ings;
         state.recipes = recs;
-      } else {
-        state.ingredients = state.ingredients.concat(ings);
-        state.recipes = state.recipes.concat(recs);
+        migrateLegacy();
+        saveState();
+        renderHero(); renderMaster(); renderRecipeList();
+        alert(`上書き完了\n食材: ${ings.length}件 / レシピ: ${recs.length}件`);
       }
-      saveState();
-      renderHero(); renderMaster(); renderRecipeList();
-      alert('読み込み完了');
     }catch(err){alert('読み込み失敗: '+err.message);}
   };
   reader.readAsText(file);
