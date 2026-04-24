@@ -1,4 +1,4 @@
-const CACHE = 'genka-v20260424a';
+const CACHE = 'genka-v20260424q';
 const ASSETS = [
   './',
   './index.html',
