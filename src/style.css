@@ -141,6 +141,15 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .inline-field input { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13px; width: 110px; text-align: right; }
 .inline-field.spot input { border-color: #e0b87a; background: #fffaf2; }
 .inline-field.mul input { width: 70px; }
+.inline-field.price input { width: 100px; }
+.inline-field.price.override input { border-color: #c67b1d; background: #fff7e8; color: #8a4e00; font-weight: 600; }
+.inline-field.price.override > span { color: #c67b1d; font-weight: 600; }
+.reset-link { background: transparent; border: 0; color: var(--accent-2); cursor: pointer; font-size: 11px; padding: 0 4px; font-weight: 600; }
+.reset-link:hover { text-decoration: underline; }
+.price-master-note { color: var(--ink-sub); text-decoration: line-through; font-size: 11px; margin-right: 2px; }
+.price-override-note { color: #c67b1d; font-weight: 600; font-size: 12px; }
+.muted-sub { color: var(--ink-sub); font-size: 11px; margin-left: 2px; }
+.item-card.has-override { border-color: #e0b87a; background: #fffbf4; }
 .inline-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; }
 .inline-chip input { accent-color: var(--accent); }
 .item-row-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-sub); flex-wrap: wrap; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--line); }

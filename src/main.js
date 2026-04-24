@@ -64,13 +64,18 @@ function migrateLegacy(){
     // 旧フィールドを削除
     delete r.auto_salt; delete r.salt_ratio_pct; delete r.salt_ingredient_id;
     delete r.skin_enabled; delete r.skin_ingredient_id; delete r.skin_g_per_serving;
-    // items の x2/dewater → multiplier
+    // items の x2/dewater → multiplier, spot_price → price_override
     (r.items||[]).forEach(it => {
       if(it.multiplier === undefined){
         it.multiplier = it.x2 ? 2 : 1;
       }
       delete it.x2;
       delete it.dewater;
+      if(it.spot_price !== undefined){
+        if(it.price_override === undefined) it.price_override = it.spot_price;
+        delete it.spot_price;
+      }
+      if(it.price_override === undefined) it.price_override = null;
     });
   });
 }
@@ -111,7 +116,7 @@ function makeItem(init){
     ingredient_id: null,
     grams: 0,
     multiplier: 1,
-    spot_price: null,
+    price_override: null, // このレシピでのみ適用する kg単価(null=マスタ値を使用)
   }, init||{});
 }
 
@@ -123,8 +128,11 @@ function getCurrent(){return getRecipe(state.currentRecipeId);}
 function effectivePrice(item){
   const ing = getIngredient(item.ingredient_id);
   if(!ing) return null;
-  if(ing.price_type === 'spot' && item.spot_price != null && item.spot_price !== '') return num(item.spot_price);
+  if(item.price_override != null && item.price_override !== '') return num(item.price_override);
   return num(ing.kg_price);
+}
+function hasPriceOverride(item){
+  return item.price_override != null && item.price_override !== '';
 }
 
 function calcRecipe(r){
@@ -328,8 +336,13 @@ function renderItemCard(it, idx){
   const price = effectivePrice(it);
   const mul = num(it.multiplier, 1);
   const cost = (price!=null && ing) ? (num(it.grams) * price/1000 * mul) : 0;
-  const isSpot = ing && ing.price_type==='spot';
-  return `<div class="item-card" data-id="${it.id}">
+  const masterPrice = ing ? num(ing.kg_price) : null;
+  const overridden = hasPriceOverride(it);
+  const priceVal = overridden ? it.price_override : (masterPrice!=null ? masterPrice : '');
+  const resetBtn = overridden
+    ? `<button type="button" class="reset-link" onclick="updateItem('${it.id}','price_override',null)" title="マスタ単価に戻す">↺</button>`
+    : '';
+  return `<div class="item-card${overridden?' has-override':''}" data-id="${it.id}">
     <div class="item-row-main">
       <select class="item-ing-select" onchange="updateItem('${it.id}','ingredient_id',this.value)">
         ${selOpts.replace(`value="${it.ingredient_id}"`, `value="${it.ingredient_id}" selected`)}
@@ -341,14 +354,14 @@ function renderItemCard(it, idx){
         <span>使用g</span>
         <input type="number" step="0.1" value="${it.grams}" onchange="updateItem('${it.id}','grams',this.value)">
       </label>
+      <label class="inline-field price ${overridden?'override':''}">
+        <span>kg単価¥ ${resetBtn}</span>
+        <input type="number" step="1" value="${priceVal}" placeholder="${masterPrice!=null?fmt(masterPrice,0):'(食材未選択)'}" onchange="updateItem('${it.id}','price_override',this.value)" title="このレシピだけで使う kg単価。空欄でマスタ値に戻ります">
+      </label>
       <label class="inline-field mul">
         <span>倍率</span>
-        <input type="number" step="0.1" min="0" value="${mul}" onchange="updateItem('${it.id}','multiplier',this.value)" title="使用g に対する倍率。例: 野菜の水抜き前後で2倍仕入れる場合は 2">
+        <input type="number" step="0.1" min="0" value="${mul}" onchange="updateItem('${it.id}','multiplier',this.value)" title="使用g に対する倍率">
       </label>
-      ${isSpot?`<label class="inline-field spot">
-        <span>都度 kg単価¥</span>
-        <input type="number" step="1" value="${it.spot_price??''}" placeholder="${ing?fmt(ing.kg_price,0):''}" onchange="updateItem('${it.id}','spot_price',this.value)">
-      </label>`:''}
     </div>
     <div class="item-row-info">
       ${priceInfo}
@@ -359,9 +372,14 @@ function renderItemCard(it, idx){
 
 function priceBadgeHtml(ing, it){
   const t = PRICE_TYPES[ing.price_type]||{};
-  const p = effectivePrice(it);
-  const override = ing.price_type==='spot' && it.spot_price!=null && it.spot_price!=='' ? ' (都度上書)' : '';
-  return `<span class="price-badge" style="background:${t.bg};color:${t.color}">${t.short||''}</span> ¥${fmt(p||0,0)}/kg${override}`;
+  const master = num(ing.kg_price);
+  if(hasPriceOverride(it)){
+    const ov = num(it.price_override);
+    return `<span class="price-badge" style="background:${t.bg};color:${t.color}">${t.short||''}</span>
+      <span class="price-master-note">マスタ¥${fmt(master,0)}/kg</span>
+      <span class="price-override-note">→ このレシピ ¥${fmt(ov,0)}/kg</span>`;
+  }
+  return `<span class="price-badge" style="background:${t.bg};color:${t.color}">${t.short||''}</span> ¥${fmt(master,0)}/kg <span class="muted-sub">(マスタ値)</span>`;
 }
 
 function updateItem(id, key, value){
@@ -369,9 +387,15 @@ function updateItem(id, key, value){
   const it = r.items.find(x=>x.id===id); if(!it) return;
   if(key==='ingredient_id'){
     it.ingredient_id = value || null;
-    it.spot_price = null;
-  } else if(key==='grams' || key==='spot_price'){
-    it[key] = value==='' ? (key==='spot_price'?null:0) : num(value);
+    it.price_override = null;
+  } else if(key==='grams'){
+    it.grams = value==='' ? 0 : num(value);
+  } else if(key==='price_override'){
+    if(value === null || value === '' || value === undefined){
+      it.price_override = null;
+    } else {
+      it.price_override = num(value);
+    }
   } else if(key==='multiplier'){
     it.multiplier = value==='' ? 1 : num(value, 1);
   }
