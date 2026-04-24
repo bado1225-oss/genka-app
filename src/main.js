@@ -604,7 +604,7 @@ function deleteIngredient(id){
   renderHero();
 }
 
-// ============ 補助ツール ============
+// ============ メモ機能(補助ツール) ============
 function calcScrap(){
   const unit = num(document.getElementById('tool-scrap-unit').value,17);
   const a = num(document.getElementById('tool-scrap-a').value,2650);

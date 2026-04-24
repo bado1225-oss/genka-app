@@ -11,12 +11,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424k">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424k">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424k">
-<link rel="manifest" href="manifest.webmanifest?v=20260424k">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424l">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424l">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424l">
+<link rel="manifest" href="manifest.webmanifest?v=20260424l">
 <title>原価計算アプリ</title>
-<link rel="stylesheet" href="src/style.css?v=20260424k">
+<link rel="stylesheet" href="src/style.css?v=20260424l">
 </head>
 <body>
 <div class="app">
@@ -27,9 +27,9 @@
         <div class="header-sub">メニュー別 1人前原価シミュレーター</div>
       </div>
       <div class="header-actions">
-        <button class="header-icon-btn" onclick="showTab('master')" aria-label="食材マスタ" title="食材マスタ">🥬</button>
-        <button class="header-icon-btn" onclick="showTab('tools')" aria-label="補助ツール" title="補助ツール">🧮</button>
-        <button class="header-icon-btn" onclick="showTab('settings')" aria-label="設定" title="設定">⚙️</button>
+        <button class="header-icon-btn" onclick="showTab('master')" aria-label="食材マスタ" data-tip="食材マスタ">🥬</button>
+        <button class="header-icon-btn" onclick="showTab('tools')" aria-label="メモ機能" data-tip="メモ機能">🧮</button>
+        <button class="header-icon-btn" onclick="showTab('settings')" aria-label="設定" data-tip="設定">⚙️</button>
       </div>
     </div>
   </div>
@@ -47,8 +47,6 @@
   <div class="main-segment-tabs">
     <button class="main-segment-btn active" id="seg-recipes" onclick="showTab('recipes')"><span class="seg-icon">📋</span>レシピ</button>
     <button class="main-segment-btn" id="seg-master" onclick="showTab('master')"><span class="seg-icon">🥬</span>食材</button>
-    <button class="main-segment-btn" id="seg-tools" onclick="showTab('tools')"><span class="seg-icon">🧮</span>補助</button>
-    <button class="main-segment-btn" id="seg-settings" onclick="showTab('settings')"><span class="seg-icon">⚙️</span>設定</button>
   </div>
 
   <div class="view-wrap">
@@ -160,7 +158,7 @@
       </div>
     </div>
 
-    <!-- ============== 補助ツール ============== -->
+    <!-- ============== メモ機能(補助ツール) ============== -->
     <div id="view-tools" style="display:none;">
       <div class="section-card">
         <div class="section-title">端材換算(炭火焼端材 → 必要餡量・餃子個数)</div>
@@ -294,6 +292,6 @@
   </div>
 </div>
 
-<script src="src/main.js?v=20260424k"></script>
+<script src="src/main.js?v=20260424l"></script>
 </body>
 </html>
