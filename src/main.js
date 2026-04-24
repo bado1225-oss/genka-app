@@ -487,9 +487,9 @@ function renderIngredientRow(i){
     <div class="ing-row-main">
       <span class="price-badge" style="background:${t.bg};color:${t.color}">${t.short||''}</span>
       <span class="ing-name">${esc(i.name)}</span>
-      <span class="ing-price">¥${fmt(i.kg_price,0)}/kg</span>
     </div>
     <div class="ing-row-meta">
+      <span class="ing-price">¥${fmt(i.kg_price,0)}/kg</span>
       ${i.memo?`<span class="ing-memo">${esc(i.memo)}</span>`:''}
       ${used>0?`<span class="ing-used">使用中 ${used}件</span>`:'<span class="ing-unused">未使用</span>'}
     </div>
