@@ -34,8 +34,45 @@ function loadState(){
       const p = JSON.parse(raw);
       state.ingredients = Array.isArray(p.ingredients)?p.ingredients:[];
       state.recipes = Array.isArray(p.recipes)?p.recipes:[];
+      migrateLegacy();
     }
   }catch(e){console.warn('load failed',e);}
+}
+
+function migrateLegacy(){
+  state.recipes.forEach(r => {
+    // 皮を通常食材として items に追加
+    if(r.skin_enabled && r.skin_ingredient_id && num(r.skin_g_per_serving) > 0){
+      r.items.push(makeItem({
+        ingredient_id: r.skin_ingredient_id,
+        grams: num(r.skin_g_per_serving),
+        multiplier: 1,
+      }));
+    }
+    // 塩(水抜き用)を通常食材として items に追加
+    if(r.auto_salt && r.salt_ingredient_id){
+      const dewaterG = (r.items||[]).filter(it=>it.dewater).reduce((s,it)=>s+num(it.grams),0);
+      const saltG = dewaterG * 2 * (num(r.salt_ratio_pct)/100);
+      if(saltG > 0){
+        r.items.push(makeItem({
+          ingredient_id: r.salt_ingredient_id,
+          grams: +saltG.toFixed(3),
+          multiplier: 1,
+        }));
+      }
+    }
+    // 旧フィールドを削除
+    delete r.auto_salt; delete r.salt_ratio_pct; delete r.salt_ingredient_id;
+    delete r.skin_enabled; delete r.skin_ingredient_id; delete r.skin_g_per_serving;
+    // items の x2/dewater → multiplier
+    (r.items||[]).forEach(it => {
+      if(it.multiplier === undefined){
+        it.multiplier = it.x2 ? 2 : 1;
+      }
+      delete it.x2;
+      delete it.dewater;
+    });
+  });
 }
 function saveState(){
   localStorage.setItem(LS_KEY, JSON.stringify({
@@ -65,12 +102,6 @@ function makeRecipe(init){
     category: '餃子',
     per_serving_desc: '',
     items: [],
-    auto_salt: 0,
-    salt_ratio_pct: 2,
-    salt_ingredient_id: null,
-    skin_enabled: 0,
-    skin_ingredient_id: null,
-    skin_g_per_serving: 0,
     updated_at: new Date().toISOString(),
   }, init||{});
 }
@@ -79,8 +110,7 @@ function makeItem(init){
     id: uid('it'),
     ingredient_id: null,
     grams: 0,
-    x2: 0,
-    dewater: 0,
+    multiplier: 1,
     spot_price: null,
   }, init||{});
 }
@@ -104,39 +134,18 @@ function calcRecipe(r){
     const ing = getIngredient(it.ingredient_id);
     const price = effectivePrice(it);
     const g = num(it.grams);
-    const mul = it.x2 ? 2 : 1;
+    const mul = num(it.multiplier, 1);
     const has_price = price != null && ing;
     const cost = has_price ? g * (price/1000) * mul : 0;
     return { item: it, ingredient: ing, price, g, mul, cost, has_price };
   });
   const ing_cost = rows.reduce((s,x)=>s+x.cost, 0);
-
-  // 塩(自動)
-  let salt_g = 0, salt_cost = 0, salt_ing = null;
-  if(r.auto_salt && r.salt_ingredient_id){
-    salt_ing = getIngredient(r.salt_ingredient_id);
-    const dewater_g = rows.filter(x=>x.item.dewater).reduce((s,x)=>s+x.g, 0);
-    salt_g = dewater_g * 2 * (num(r.salt_ratio_pct)/100);
-    salt_cost = salt_ing ? salt_g * (num(salt_ing.kg_price)/1000) : 0;
-  }
-
-  // 皮
-  let skin_g = 0, skin_cost = 0, skin_ing = null;
-  if(r.skin_enabled && r.skin_ingredient_id){
-    skin_ing = getIngredient(r.skin_ingredient_id);
-    skin_g = num(r.skin_g_per_serving);
-    skin_cost = skin_ing ? skin_g * (num(skin_ing.kg_price)/1000) : 0;
-  }
-
-  const total_g = rows.reduce((s,x)=>s+(x.g*x.mul),0) + salt_g + skin_g;
-  const per_cost = ing_cost + salt_cost + skin_cost;
-  const extra_cost = salt_cost + skin_cost;
-
-  // 各行の比率
-  const mass_total = total_g || 1;
+  const total_g = rows.reduce((s,x)=>s+x.g, 0);
+  const mass_g = rows.reduce((s,x)=>s+(x.g*x.mul), 0);
+  const per_cost = ing_cost;
+  const mass_total = mass_g || 1;
   rows.forEach(x => { x.mass_ratio = (x.g*x.mul)/mass_total; });
-
-  return {rows, ing_cost, salt_g, salt_cost, salt_ing, skin_g, skin_cost, skin_ing, total_g, per_cost, extra_cost};
+  return {rows, ing_cost, total_g, mass_g, per_cost};
 }
 
 // ============ タブ制御 ============
@@ -246,16 +255,8 @@ function openRecipe(id){
   document.getElementById('edit-name').value = r.name;
   document.getElementById('edit-category').value = r.category;
   document.getElementById('edit-serving-desc').value = r.per_serving_desc||'';
-  document.getElementById('edit-auto-salt').value = r.auto_salt?'1':'0';
-  document.getElementById('edit-salt-ratio').value = r.salt_ratio_pct;
-  document.getElementById('edit-skin-enabled').value = r.skin_enabled?'1':'0';
-  document.getElementById('edit-skin-g').value = r.skin_g_per_serving;
   document.getElementById('scale-servings').value = 1;
   document.getElementById('save-stamp').textContent = r.updated_at ? `最終保存 ${new Date(r.updated_at).toLocaleString('ja-JP')}` : '';
-  populateIngredientSelects();
-  document.getElementById('edit-salt-ing').value = r.salt_ingredient_id || '';
-  document.getElementById('edit-skin-ing').value = r.skin_ingredient_id || '';
-  toggleSkin();
   renderItems();
   recompute();
 }
@@ -289,37 +290,12 @@ function writeBackForm(r){
   r.name = document.getElementById('edit-name').value || '(無題)';
   r.category = document.getElementById('edit-category').value;
   r.per_serving_desc = document.getElementById('edit-serving-desc').value || '';
-  r.auto_salt = document.getElementById('edit-auto-salt').value==='1'?1:0;
-  r.salt_ratio_pct = num(document.getElementById('edit-salt-ratio').value);
-  r.salt_ingredient_id = document.getElementById('edit-salt-ing').value || null;
-  r.skin_enabled = document.getElementById('edit-skin-enabled').value==='1'?1:0;
-  r.skin_ingredient_id = document.getElementById('edit-skin-ing').value || null;
-  r.skin_g_per_serving = num(document.getElementById('edit-skin-g').value);
 }
 
-function toggleSkin(){
-  const on = document.getElementById('edit-skin-enabled').value==='1';
-  document.getElementById('skin-ing-wrap').style.display = on?'':'none';
-  document.getElementById('skin-g-wrap').style.display = on?'':'none';
-}
-
-function populateIngredientSelects(){
-  const optsAll = buildIngredientOptions();
-  const optsSkin = buildIngredientOptions({category:'皮'});
-  const optsSalt = buildIngredientOptions({nameHas:'塩'});
-  document.getElementById('edit-salt-ing').innerHTML = '<option value="">(未設定)</option>' + (optsSalt||optsAll);
-  document.getElementById('edit-skin-ing').innerHTML = '<option value="">(未設定)</option>' + (optsSkin||optsAll);
-}
-
-function buildIngredientOptions(filter){
-  filter = filter||{};
+function buildIngredientOptions(){
   const groups = {};
   INGREDIENT_CATS.forEach(c=>groups[c]=[]);
-  state.ingredients.forEach(i=>{
-    if(filter.category && i.category!==filter.category) return;
-    if(filter.nameHas && !(i.name||'').includes(filter.nameHas)) return;
-    (groups[i.category]||groups['その他']).push(i);
-  });
+  state.ingredients.forEach(i => (groups[i.category]||groups['その他']).push(i));
   let html = '';
   INGREDIENT_CATS.forEach(c=>{
     if(!groups[c].length) return;
@@ -350,7 +326,8 @@ function renderItemCard(it, idx){
   const selOpts = `<option value="">(食材を選択)</option>` + optsAll;
   const priceInfo = ing ? priceBadgeHtml(ing, it) : '<span class="muted">未選択</span>';
   const price = effectivePrice(it);
-  const cost = (price!=null && ing) ? (num(it.grams) * price/1000 * (it.x2?2:1)) : 0;
+  const mul = num(it.multiplier, 1);
+  const cost = (price!=null && ing) ? (num(it.grams) * price/1000 * mul) : 0;
   const isSpot = ing && ing.price_type==='spot';
   return `<div class="item-card" data-id="${it.id}">
     <div class="item-row-main">
@@ -364,12 +341,14 @@ function renderItemCard(it, idx){
         <span>使用g</span>
         <input type="number" step="0.1" value="${it.grams}" onchange="updateItem('${it.id}','grams',this.value)">
       </label>
+      <label class="inline-field mul">
+        <span>倍率</span>
+        <input type="number" step="0.1" min="0" value="${mul}" onchange="updateItem('${it.id}','multiplier',this.value)" title="使用g に対する倍率。例: 野菜の水抜き前後で2倍仕入れる場合は 2">
+      </label>
       ${isSpot?`<label class="inline-field spot">
         <span>都度 kg単価¥</span>
         <input type="number" step="1" value="${it.spot_price??''}" placeholder="${ing?fmt(ing.kg_price,0):''}" onchange="updateItem('${it.id}','spot_price',this.value)">
       </label>`:''}
-      <label class="inline-chip"><input type="checkbox" ${it.x2?'checked':''} onchange="updateItem('${it.id}','x2',this.checked?1:0)"> ×2</label>
-      <label class="inline-chip"><input type="checkbox" ${it.dewater?'checked':''} onchange="updateItem('${it.id}','dewater',this.checked?1:0)"> 脱水</label>
     </div>
     <div class="item-row-info">
       ${priceInfo}
@@ -393,8 +372,8 @@ function updateItem(id, key, value){
     it.spot_price = null;
   } else if(key==='grams' || key==='spot_price'){
     it[key] = value==='' ? (key==='spot_price'?null:0) : num(value);
-  } else if(key==='x2'||key==='dewater'){
-    it[key] = value?1:0;
+  } else if(key==='multiplier'){
+    it.multiplier = value==='' ? 1 : num(value, 1);
   }
   renderItems();
   recompute();
@@ -418,15 +397,15 @@ function recompute(){
   const r = getCurrent(); if(!r) return;
   writeBackForm(r);
   const c = calcRecipe(r);
-  document.getElementById('sum-per-cost').textContent = '¥'+fmt(c.per_cost,0);
+  document.getElementById('sum-per-cost').textContent = fmt(c.per_cost,0);
   document.getElementById('sum-total-g').textContent = fmt(c.total_g,1);
-  document.getElementById('sum-ing-cost').textContent = fmt(c.ing_cost,0);
-  document.getElementById('sum-extra-cost').textContent = fmt(c.extra_cost,0);
-  const note = [];
-  note.push(`材料 ¥${fmt(c.ing_cost,2)}`);
-  if(c.salt_cost>0) note.push(`塩 ¥${fmt(c.salt_cost,2)} (${fmt(c.salt_g,2)}g)`);
-  if(c.skin_cost>0) note.push(`皮 ¥${fmt(c.skin_cost,2)} (${fmt(c.skin_g,1)}g)`);
-  document.getElementById('sum-note').textContent = note.join(' + ');
+  document.getElementById('sum-item-count').textContent = r.items.length;
+  document.getElementById('sum-mass-g').textContent = fmt(c.mass_g,1);
+  const unlinked = c.rows.filter(x=>!x.ingredient).length;
+  const nopriceCnt = c.rows.filter(x=>!x.has_price).length;
+  const note = [`合計 ¥${fmt(c.per_cost,2)}`];
+  if(unlinked) note.push(`⚠ 未選択 ${unlinked}件`);
+  document.getElementById('sum-note').textContent = note.join(' / ');
 
   const servings = num(document.getElementById('scale-servings').value, 1);
   document.getElementById('scale-total-g').value = fmt(c.total_g*servings,1) + ' g';
@@ -693,42 +672,39 @@ function seedAll(){
   const byName = Object.fromEntries(state.ingredients.map(i=>[i.name,i]));
   // レシピ生成: 1人前 = 5個 (5×17=85g)
   const recipeItems = [
-    {name:'地頭鶏(炭火焼)',     base:2650, x2:0, dewater:0},
-    {name:'豚ミンチ2mm',        base:3000, x2:0, dewater:0},
-    {name:'キャベツ',           base:4320, x2:1, dewater:1},
-    {name:'玉ねぎ',             base:580,  x2:1, dewater:1},
-    {name:'ニラ',               base:180,  x2:1, dewater:1},
-    {name:'コンソメ(スープ用)', base:48,   x2:0, dewater:0},
-    {name:'水',                 base:3000, x2:0, dewater:0},
-    {name:'にんにく',           base:430,  x2:0, dewater:0},
-    {name:'しょうが',           base:144,  x2:0, dewater:0},
-    {name:'オイスターソース',   base:156,  x2:0, dewater:0},
-    {name:'醤油',               base:156,  x2:0, dewater:0},
-    {name:'味の素',             base:96,   x2:0, dewater:0},
-    {name:'コンソメ',           base:84,   x2:0, dewater:0},
-    {name:'ごま油',             base:84,   x2:0, dewater:0},
-    {name:'砂糖',               base:72,   x2:0, dewater:0},
+    {name:'地頭鶏(炭火焼)',     base:2650, multiplier:1},
+    {name:'豚ミンチ2mm',        base:3000, multiplier:1},
+    {name:'キャベツ',           base:4320, multiplier:2},
+    {name:'玉ねぎ',             base:580,  multiplier:2},
+    {name:'ニラ',               base:180,  multiplier:2},
+    {name:'コンソメ(スープ用)', base:48,   multiplier:1},
+    {name:'水',                 base:3000, multiplier:1},
+    {name:'にんにく',           base:430,  multiplier:1},
+    {name:'しょうが',           base:144,  multiplier:1},
+    {name:'オイスターソース',   base:156,  multiplier:1},
+    {name:'醤油',               base:156,  multiplier:1},
+    {name:'味の素',             base:96,   multiplier:1},
+    {name:'コンソメ',           base:84,   multiplier:1},
+    {name:'ごま油',             base:84,   multiplier:1},
+    {name:'砂糖',               base:72,   multiplier:1},
   ];
   const total_base = recipeItems.reduce((s,x)=>s+x.base,0); // 15000
   const per_serving_g = 5 * 17; // 85g
-  const ratio = per_serving_g / total_base; // 1人前配分
+  const ratio = per_serving_g / total_base;
   const items = recipeItems.map(ri => {
     const ing = byName[ri.name];
-    return makeItem({ingredient_id: ing?.id || null, grams: +(ri.base*ratio).toFixed(3), x2: ri.x2, dewater: ri.dewater});
+    return makeItem({ingredient_id: ing?.id || null, grams: +(ri.base*ratio).toFixed(3), multiplier: ri.multiplier});
   });
-  const salt = byName['塩(水抜き用)'];
+  // 皮(10g×5個=50g) と 塩(水抜き用: 28.787g×2×2%=1.15g) を通常材料として追加
   const skin = byName['餃子の皮 10cm'];
+  const salt = byName['塩(水抜き用)'];
+  if(skin) items.push(makeItem({ingredient_id: skin.id, grams: 50, multiplier: 1}));
+  if(salt) items.push(makeItem({ingredient_id: salt.id, grams: 1.15, multiplier: 1}));
   const recipe = makeRecipe({
     name:'炭火焼鶏餃子',
     category:'餃子',
     per_serving_desc:'5個',
     items,
-    auto_salt: 1,
-    salt_ratio_pct: 2,
-    salt_ingredient_id: salt?.id||null,
-    skin_enabled: 1,
-    skin_ingredient_id: skin?.id||null,
-    skin_g_per_serving: 50, // 10g × 5個
   });
   state.recipes.push(recipe);
   saveState();

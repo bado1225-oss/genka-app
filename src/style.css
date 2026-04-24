@@ -140,6 +140,7 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .inline-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--ink-sub); }
 .inline-field input { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13px; width: 110px; text-align: right; }
 .inline-field.spot input { border-color: #e0b87a; background: #fffaf2; }
+.inline-field.mul input { width: 70px; }
 .inline-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; }
 .inline-chip input { accent-color: var(--accent); }
 .item-row-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-sub); flex-wrap: wrap; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--line); }

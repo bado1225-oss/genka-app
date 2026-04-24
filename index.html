@@ -11,12 +11,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424b">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424b">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424b">
-<link rel="manifest" href="manifest.webmanifest?v=20260424b">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424c">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424c">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424c">
+<link rel="manifest" href="manifest.webmanifest?v=20260424c">
 <title>原価計算アプリ</title>
-<link rel="stylesheet" href="src/style.css?v=20260424b">
+<link rel="stylesheet" href="src/style.css?v=20260424c">
 </head>
 <body>
 <div class="app">
@@ -98,32 +98,13 @@
           </div>
         </div>
 
-        <div class="section-card">
-          <div class="section-title">塩(水抜き用・自動計算)</div>
-          <div class="grid-3">
-            <label>自動計上<select id="edit-auto-salt" onchange="recompute()"><option value="1">する</option><option value="0">しない</option></select></label>
-            <label>塩食材<select id="edit-salt-ing" onchange="recompute()"></select></label>
-            <label>塩 対脱水野菜比率(%)<input type="number" id="edit-salt-ratio" step="0.1" value="2" oninput="recompute()"></label>
-          </div>
-          <div class="muted-note">「脱水」にチェックした野菜の1人前gに対して、2倍量×この%を塩として自動計上します。</div>
-        </div>
-
-        <div class="section-card">
-          <div class="section-title">皮(任意)</div>
-          <div class="grid-3">
-            <label>皮を使う<select id="edit-skin-enabled" onchange="toggleSkin();recompute()"><option value="1">はい</option><option value="0">いいえ</option></select></label>
-            <label id="skin-ing-wrap">皮食材<select id="edit-skin-ing" onchange="recompute()"></select></label>
-            <label id="skin-g-wrap">1人前 皮g<input type="number" id="edit-skin-g" step="0.1" oninput="recompute()"></label>
-          </div>
-        </div>
-
         <div class="section-card summary-card">
           <div class="section-title">集計</div>
           <div class="summary-grid">
             <div class="summary-item accent"><div class="s-label">1人前 原価</div><div class="s-value"><span id="sum-per-cost">0</span> 円</div></div>
             <div class="summary-item"><div class="s-label">1人前 総重量</div><div class="s-value"><span id="sum-total-g">0</span> g</div></div>
-            <div class="summary-item"><div class="s-label">材料費</div><div class="s-value">¥<span id="sum-ing-cost">0</span></div></div>
-            <div class="summary-item"><div class="s-label">塩+皮</div><div class="s-value">¥<span id="sum-extra-cost">0</span></div></div>
+            <div class="summary-item"><div class="s-label">材料数</div><div class="s-value"><span id="sum-item-count">0</span></div></div>
+            <div class="summary-item"><div class="s-label">倍率考慮重量</div><div class="s-value"><span id="sum-mass-g">0</span> g</div></div>
           </div>
           <div class="summary-note" id="sum-note"></div>
         </div>
@@ -303,6 +284,6 @@
   </div>
 </div>
 
-<script src="src/main.js?v=20260424b"></script>
+<script src="src/main.js?v=20260424c"></script>
 </body>
 </html>
