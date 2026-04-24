@@ -755,6 +755,48 @@ function seedVegetables(){
   alert(`野菜マスター: ${added}件 追加 / ${skipped}件 既存スキップ`);
 }
 
+// ============ 魚マスター(20件) 一括取り込み ============
+const FISH_MASTER = [
+  {id:'F001',name:'アジ',             sub:'魚（青魚）',price:800,  yield:0.60, note:'丸魚'},
+  {id:'F002',name:'イワシ',           sub:'魚（青魚）',price:600,  yield:0.50, note:'丸魚'},
+  {id:'F003',name:'サバ',             sub:'魚（青魚）',price:700,  yield:0.60, note:'丸魚〜三枚おろし'},
+  {id:'F004',name:'タイ',             sub:'魚（白身）',price:2000, yield:0.65, note:'三枚おろし'},
+  {id:'F005',name:'ヒラメ',           sub:'魚（白身）',price:2500, yield:0.65, note:'三枚おろし'},
+  {id:'F006',name:'カレイ',           sub:'魚（白身）',price:1500, yield:0.65, note:'三枚おろし'},
+  {id:'F007',name:'マグロ(赤身)',     sub:'高級魚',    price:2500, yield:0.85, note:'ブロック/切り身'},
+  {id:'F008',name:'サーモン',         sub:'高級魚',    price:2000, yield:0.85, note:'フィレ'},
+  {id:'F009',name:'ブリ',             sub:'高級魚',    price:1800, yield:0.65, note:'三枚おろし'},
+  {id:'F010',name:'うなぎ',           sub:'高級魚',    price:4000, yield:0.60, note:'活鰻想定'},
+  {id:'F011',name:'あさり',           sub:'貝類',      price:800,  yield:0.30, note:'殻付き'},
+  {id:'F012',name:'しじみ',           sub:'貝類',      price:700,  yield:0.30, note:'殻付き'},
+  {id:'F013',name:'ホタテ',           sub:'貝類',      price:2000, yield:0.50, note:'殻付き想定'},
+  {id:'F014',name:'エビ',             sub:'甲殻類',    price:1800, yield:0.55, note:'殻付き'},
+  {id:'F015',name:'ブラックタイガー', sub:'甲殻類',    price:2000, yield:0.55, note:'殻付き'},
+  {id:'F016',name:'カニ',             sub:'甲殻類',    price:4000, yield:0.40, note:'殻付き丸ごと'},
+  {id:'F017',name:'イカ',             sub:'その他',    price:1200, yield:0.80, note:'内臓処理後'},
+  {id:'F018',name:'タコ',             sub:'その他',    price:1800, yield:0.80, note:'下処理後'},
+  {id:'F019',name:'ちくわ',           sub:'加工品',    price:800,  yield:1.00, note:'加工品は全量可食'},
+  {id:'F020',name:'かまぼこ',         sub:'加工品',    price:1000, yield:1.00, note:'加工品は全量可食'},
+];
+
+function seedFish(){
+  let added = 0, skipped = 0;
+  FISH_MASTER.forEach(v => {
+    if(state.ingredients.some(i=>i.name===v.name)){ skipped++; return; }
+    state.ingredients.push(makeIngredient({
+      name: v.name,
+      category: '魚',
+      price_type: 'spot', // 季節変動大のためレシピ側で都度価格上書き推奨
+      kg_price: v.price,
+      memo: `[${v.id}] ${v.sub} / 歩留${Math.round(v.yield*100)}% / ${v.note} / 業務用平均価格・季節変動大`,
+    }));
+    added++;
+  });
+  saveState();
+  renderMaster(); renderHero();
+  alert(`魚マスター: ${added}件 追加 / ${skipped}件 既存スキップ`);
+}
+
 // ============ 肉マスター(19件) 一括取り込み ============
 const MEAT_MASTER = [
   {id:'M001',name:'牛こま肉',   sub:'牛肉',   price:1800, yield:0.90},
