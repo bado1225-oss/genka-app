@@ -14,7 +14,27 @@
 - 餃子専用計算・皮・餡・個数等の特定料理専用ロジック
 - 外部販売・EC販売 / 発送費 / モール手数料 / 冷凍発送コスト
 - OEM費用 / 包材マスター / パック入り原価計算(外販用)
-- 外部接続DB・認証(完全クライアントサイド)
+
+## ☁️ Firebase 同期(任意・複数端末/人で共有)
+
+静的PWA はそのままで、**Firebase Auth + Firestore だけ追加** することで、複数端末・複数スタッフ間でデータ同期できます。未設定時は従来どおり localStorage のみで動作します。
+
+### セットアップ手順
+1. [Firebase Console](https://console.firebase.google.com/) でプロジェクト作成
+2. **Authentication** → Google サインインを有効化 → 認可ドメインに `bado1225-oss.github.io` を追加
+3. **Firestore Database** → 本番モードで作成 → [firestore.rules](firestore.rules) の内容をルールに貼り付け
+4. **プロジェクト設定 → 全般 → ウェブアプリを追加** → 表示される `firebaseConfig` オブジェクトをコピー
+5. アプリの **設定タブ → Firebase 同期 → Firebase config を設定する** に貼り付け → 保存
+6. ページが再読み込みされたら **Google でサインイン**
+7. 右上の同期アイコン 🟢 になれば同期中
+
+### 動作仕様
+- **自動同期**: 食材・レシピ保存時に Firestore へ自動プッシュ(debounce 1.5秒)
+- **リアルタイム反映**: 別端末で更新されたら onSnapshot で自動取得
+- **競合解決**: `saved_at` タイムスタンプで新しい方を採用
+- **オフライン**: Firestore offline persistence で自動キャッシュ・復帰時同期
+- **データ構造**: `users/{uid}/data/main` に ingredients/recipes 1ドキュメントで保存(〜1MB 以内)
+- **API Key** はクライアント公開前提。セキュリティは Firestore ルール(認証ユーザーが自分のパスのみ読み書き可)で担保
 
 ## v4.0 汎用原価管理に再設計 (2026-04-24)
 

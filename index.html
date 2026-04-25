@@ -11,12 +11,16 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424q">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424q">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424q">
-<link rel="manifest" href="manifest.webmanifest?v=20260424q">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424r">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424r">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424r">
+<link rel="manifest" href="manifest.webmanifest?v=20260424r">
 <title>原価計算アプリ</title>
-<link rel="stylesheet" href="src/style.css?v=20260424q">
+<link rel="stylesheet" href="src/style.css?v=20260424r">
+<!-- Firebase (Auth + Firestore) compat SDK -->
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div class="app">
@@ -27,6 +31,7 @@
         <div class="header-sub">メニュー別 1人前原価シミュレーター</div>
       </div>
       <div class="header-actions">
+        <button class="header-icon-btn" id="sync-status-btn" onclick="showTab('settings')" aria-label="同期状態" data-tip="同期(未設定)">🔵</button>
         <button class="header-icon-btn" onclick="showTab('master')" aria-label="食材マスタ" data-tip="食材マスタ">🥬</button>
         <button class="header-icon-btn" onclick="showTab('settings')" aria-label="設定" data-tip="設定">⚙️</button>
       </div>
@@ -221,6 +226,55 @@
     <!-- ============== 設定 ============== -->
     <div id="view-settings" style="display:none;">
       <div class="section-card">
+        <div class="section-title">☁️ Firebase 同期(複数端末・複数人で共有)</div>
+        <div id="fb-status-panel" class="fb-status-panel">
+          <div class="fb-status-line">
+            <span class="fb-status-dot" id="fb-dot">🔵</span>
+            <span id="fb-status-text">未設定: 下に Firebase config を貼り付けてください</span>
+          </div>
+          <div id="fb-user-info" style="display:none">
+            <span id="fb-user-email" class="muted-sub"></span>
+            <button class="ghost-btn small" onclick="fbSignOut()">サインアウト</button>
+          </div>
+          <button class="primary-btn" id="fb-signin-btn" style="display:none" onclick="fbSignIn()">🔑 Google でサインイン</button>
+        </div>
+        <details id="fb-config-details">
+          <summary>Firebase config を設定する</summary>
+          <div class="muted-note" style="margin:8px 0">
+            ① Firebase Console でプロジェクト作成 → ウェブアプリ追加 → 設定オブジェクトをコピー<br>
+            ② Authentication → Google サインインを有効化 → 認可ドメインに <code>bado1225-oss.github.io</code> を追加<br>
+            ③ Firestore → データベース作成(本番モード) → 下のルールを貼り付け<br>
+            ④ 下の欄に config JSON を貼り付け → 保存
+          </div>
+          <label class="full-width">Firebase config (JS/JSON 形式どちらも可)
+            <textarea id="fb-config-input" rows="8" placeholder='const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "xxx.firebaseapp.com",
+  projectId: "xxx",
+  storageBucket: "xxx.appspot.com",
+  messagingSenderId: "...",
+  appId: "1:..."
+};'></textarea>
+          </label>
+          <div class="action-row">
+            <button class="primary-btn" onclick="fbSaveConfig()">💾 config を保存して接続</button>
+            <button class="ghost-btn" onclick="fbClearConfig()">設定をクリア</button>
+          </div>
+          <details style="margin-top:10px">
+            <summary>Firestore セキュリティルール(そのままコピー)</summary>
+            <pre class="code-block">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}</pre>
+          </details>
+        </details>
+      </div>
+
+      <div class="section-card">
         <div class="section-title">データ バックアップ</div>
         <div class="action-row">
           <button class="primary-btn" onclick="exportAll()">📤 全データ JSON書き出し</button>
@@ -315,6 +369,7 @@
   </div>
 </div>
 
-<script src="src/main.js?v=20260424q"></script>
+<script src="src/main.js?v=20260424r"></script>
+<script src="src/firebase-sync.js?v=20260424r"></script>
 </body>
 </html>

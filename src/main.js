@@ -158,6 +158,8 @@ function saveState(){
     saved_at: new Date().toISOString(),
     version: 2,
   }));
+  // Firebase に自動同期(設定+ログイン時のみ)
+  if(typeof scheduleFbPush === 'function') scheduleFbPush();
 }
 
 // ============ モデル ============
