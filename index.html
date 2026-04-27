@@ -11,12 +11,12 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260424r">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260424r">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260424r">
-<link rel="manifest" href="manifest.webmanifest?v=20260424r">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=20260427r">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=20260427r">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=20260427r">
+<link rel="manifest" href="manifest.webmanifest?v=20260427r">
 <title>原価計算アプリ</title>
-<link rel="stylesheet" href="src/style.css?v=20260424r">
+<link rel="stylesheet" href="src/style.css?v=20260427r">
 <!-- Firebase (Auth + Firestore) compat SDK -->
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -24,173 +24,224 @@
 </head>
 <body>
 <div class="app">
+
+  <!-- ============== ヘッダー ============== -->
   <div class="header">
     <div class="header-top">
-      <div class="header-title-wrap">
-        <h1>原価計算</h1>
-        <div class="header-sub">メニュー別 1人前原価シミュレーター</div>
+      <div class="header-title-wrap" onclick="showTab('home')">
+        <h1>🍳 原価計算</h1>
+        <div class="header-sub" id="header-sub">スタッフ用シンプル画面</div>
       </div>
       <div class="header-actions">
-        <button class="header-icon-btn" id="sync-status-btn" onclick="showTab('settings')" aria-label="同期状態" data-tip="同期(未設定)">🔵</button>
-        <button class="header-icon-btn" onclick="showTab('master')" aria-label="食材マスタ" data-tip="食材マスタ">🥬</button>
-        <button class="header-icon-btn" onclick="showTab('settings')" aria-label="設定" data-tip="設定">⚙️</button>
+        <button class="header-icon-btn" id="sync-status-btn" onclick="showTab('admin')" aria-label="同期状態" data-tip="同期状態">🔵</button>
+        <button class="header-icon-btn" onclick="showTab('home')" aria-label="ホーム" data-tip="ホーム">🏠</button>
       </div>
     </div>
   </div>
 
-  <div class="dashboard">
-    <div class="hero-card">
-      <div class="hero-top">
-        <div class="hero-title" id="hero-title">ダッシュボード</div>
-        <div class="hero-stamp" id="hero-stamp">–</div>
-      </div>
-      <div class="kpi-grid" id="dashboard-kpis"></div>
-      <div class="dash-extra" id="dashboard-extra"></div>
-    </div>
-  </div>
-
-  <div class="main-segment-tabs">
-    <button class="main-segment-btn active" id="seg-recipes" onclick="showTab('recipes')"><span class="seg-icon">📋</span>レシピ</button>
-    <button class="main-segment-btn" id="seg-master" onclick="showTab('master')"><span class="seg-icon">🥬</span>食材</button>
+  <!-- ============== セグメント(下部固定タブ) ============== -->
+  <div class="bottom-tabs" id="bottom-tabs">
+    <button class="bottom-tab active" id="seg-home" onclick="showTab('home')">
+      <span class="bt-ico">🏠</span><span class="bt-lbl">ホーム</span>
+    </button>
+    <button class="bottom-tab" id="seg-calc" onclick="goCalcOrList()">
+      <span class="bt-ico">🧮</span><span class="bt-lbl">原価計算</span>
+    </button>
+    <button class="bottom-tab" id="seg-list" onclick="showTab('list')">
+      <span class="bt-ico">📋</span><span class="bt-lbl">レシピ</span>
+    </button>
+    <button class="bottom-tab" id="seg-price" onclick="showTab('price')">
+      <span class="bt-ico">💴</span><span class="bt-lbl">食材価格</span>
+    </button>
+    <button class="bottom-tab" id="seg-admin" onclick="showTab('admin')">
+      <span class="bt-ico">⚙️</span><span class="bt-lbl">管理者</span>
+    </button>
   </div>
 
   <div class="view-wrap">
 
-    <!-- ============== レシピ ============== -->
-    <div id="view-recipes">
-      <div id="recipe-list-pane">
-        <div class="toolbar-row">
-          <select id="filter-recipe-category" class="toolbar-select" onchange="renderRecipeList()">
-            <option value="all">カテゴリ: すべて</option>
-          </select>
-          <input id="search-recipe" class="search-input" placeholder="レシピ名で検索" oninput="renderRecipeList()">
-        </div>
-        <div class="action-row">
-          <button class="primary-btn" onclick="newRecipe()">＋ 新規レシピ</button>
-          <button class="ghost-btn" onclick="duplicateSelected()" id="btn-duplicate" disabled>複製</button>
-        </div>
-        <div id="recipe-list"></div>
+    <!-- ============== 🏠 ホーム ============== -->
+    <div id="view-home">
+      <div class="home-greeting">
+        <div class="home-hello">こんにちは 👋</div>
+        <div class="home-date" id="home-date"></div>
+        <div class="home-tip">いま何をしますか？大きなボタンを押してください。</div>
       </div>
-
-      <div id="recipe-edit-pane" style="display:none;">
-        <div class="edit-header">
-          <button class="back-btn" onclick="backToList()">← 一覧</button>
-          <div class="edit-title-wrap">
-            <input id="edit-name" class="edit-title-input" placeholder="メニュー名" oninput="recompute()">
-            <div class="edit-sub">
-              <input id="edit-category" class="inline-select" placeholder="カテゴリ(任意)" oninput="recompute()" list="category-suggestions">
-              <datalist id="category-suggestions">
-                <option value="和食"><option value="中華"><option value="洋食"><option value="麺類">
-                <option value="丼物"><option value="サイド"><option value="前菜"><option value="デザート">
-                <option value="ドリンク">
-              </datalist>
-            </div>
-          </div>
-          <button class="danger-btn" onclick="deleteCurrent()">削除</button>
-        </div>
-
-        <!-- 3大指標を一番上に大きく表示 -->
-        <div class="section-card kpi-big-card">
-          <div class="big-kpi-grid">
-            <div class="big-kpi">
-              <div class="big-kpi-label">1皿原価</div>
-              <div id="plate-cost-big" class="big-metric muted">¥0</div>
-            </div>
-            <div class="big-kpi">
-              <div class="big-kpi-label">原価率</div>
-              <div id="cr-big" class="big-metric muted">–</div>
-            </div>
-            <div class="big-kpi">
-              <div class="big-kpi-label">粗利額</div>
-              <div id="margin-big" class="big-metric muted">–</div>
-            </div>
-          </div>
-          <div class="sub-kpi-row">
-            <span>1人前原価 <b id="sub-per-serving">¥0</b></span>
-            <span>人前/皿 <b id="sub-servings">1</b></span>
-            <span>販売価格 <b id="sub-selling">未設定</b></span>
-            <span>粗利率 <b id="sub-margin-ratio">–</b></span>
-            <span>推奨販売価格 <b id="sub-suggested">–</b></span>
-          </div>
-          <div class="alert-box" id="sim-warning" style="display:none"></div>
-          <div class="color-legend">
-            <span class="cr-low">■ 〜30% 緑</span>
-            <span class="cr-mid">■ 30〜35% 黄</span>
-            <span class="cr-high">■ 35%超 赤</span>
-          </div>
-        </div>
-
-        <div class="section-card">
-          <div class="section-title">基本設定</div>
-          <div class="grid-3">
-            <label>販売価格(円)<input type="number" id="edit-selling-price" step="1" value="0" oninput="recompute()"></label>
-            <label>目標原価率(%)<input type="number" id="edit-target-cr" step="0.1" value="30" oninput="recompute()"></label>
-            <label>何人前/皿<input type="number" id="edit-servings" step="1" min="1" value="1" oninput="recompute()"></label>
-          </div>
-          <label class="full-width">メモ<textarea id="edit-notes" rows="2" placeholder="調理手順のメモや提供時の注意事項(任意)" oninput="recompute()"></textarea></label>
-        </div>
-
-        <div class="section-card">
-          <div class="section-title">材料</div>
-          <div id="item-list"></div>
-          <div class="action-row">
-            <button class="primary-btn" onclick="addItem()">＋ 材料追加</button>
-            <button class="ghost-btn" onclick="showTab('master')">🥬 食材マスタへ</button>
-          </div>
-        </div>
-
-        <div class="section-card">
-          <div class="section-title">原価詳細(材料別・構成比)</div>
-          <div class="ing-table-wrap">
-            <table class="ing-table compact">
-              <thead><tr><th>材料</th><th>使用量</th><th>仕入量</th><th>原価</th><th>構成比</th></tr></thead>
-              <tbody id="cost-detail-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- 販売価格シミュレーション -->
-        <div class="section-card">
-          <div class="section-title">販売価格シミュレーション</div>
-          <div class="sugg-grid">
-            <div class="sugg-card">
-              <div class="sugg-label">推奨販売価格<br><small>(目標原価率ベース)</small></div>
-              <div id="sim-sugg-by-ratio" class="sugg-value accent">–</div>
-              <div id="sim-sugg-by-ratio-raw" class="sugg-sub muted"></div>
-            </div>
-            <div class="sugg-card">
-              <div class="sugg-label">推奨販売価格<br><small>(目標粗利ベース)</small></div>
-              <div id="sim-sugg-by-margin" class="sugg-value accent">–</div>
-              <div id="sim-sugg-by-margin-raw" class="sugg-sub muted"></div>
-            </div>
-          </div>
-          <div class="grid-2">
-            <label>目標粗利額(円・任意)<input type="number" id="edit-target-margin" step="10" value="0" oninput="recompute()" title="例: 300と入力すると「1皿原価+¥300」が推奨価格に"></label>
-            <label>試算価格(円)<input type="number" id="sim-trial-price" step="10" placeholder="任意の販売価格で試算" oninput="recompute()"></label>
-          </div>
-          <div id="sim-trial-result" class="sim-trial-result">試算価格を入力してください</div>
-
-          <div class="section-subtitle">価格帯別シミュレーション</div>
-          <div class="muted-note">現在の販売価格(または推奨価格)を中心に±100円刻みで原価率・粗利を比較</div>
-          <div class="ing-table-wrap">
-            <table class="ing-table compact">
-              <thead><tr><th>販売価格</th><th>原価率</th><th>粗利額</th><th>粗利率</th></tr></thead>
-              <tbody id="sim-price-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="action-row save-row sticky-save">
-          <button class="primary-btn big" onclick="saveCurrent()">💾 保存</button>
-          <span class="save-stamp" id="save-stamp"></span>
-        </div>
+      <div class="home-tile-grid">
+        <button class="home-tile primary" onclick="goCalc()">
+          <div class="home-tile-icon">🧮</div>
+          <div class="home-tile-title">原価を計算する</div>
+          <div class="home-tile-desc">料理を選ぶ → 材料を入れる → 原価が出る</div>
+        </button>
+        <button class="home-tile" onclick="showTab('list')">
+          <div class="home-tile-icon">📋</div>
+          <div class="home-tile-title">レシピを見る</div>
+          <div class="home-tile-desc">登録した料理の一覧</div>
+        </button>
+        <button class="home-tile" onclick="showTab('price')">
+          <div class="home-tile-icon">💴</div>
+          <div class="home-tile-title">食材価格を確認する</div>
+          <div class="home-tile-desc">いまの仕入れ価格</div>
+        </button>
+        <button class="home-tile dark" onclick="showTab('admin')">
+          <div class="home-tile-icon">⚙️</div>
+          <div class="home-tile-title">管理者メニュー</div>
+          <div class="home-tile-desc">編集・バックアップ・サンプル</div>
+        </button>
       </div>
+      <div class="home-mini-kpi" id="home-mini-kpi"></div>
     </div>
 
-    <!-- ============== 食材マスタ ============== -->
-    <div id="view-master" style="display:none;">
-      <div class="section-card">
-        <div class="section-title">食材マスタ(価格台帳)</div>
+    <!-- ============== 📋 レシピ一覧 ============== -->
+    <div id="view-list" style="display:none;">
+      <div class="page-header">
+        <div class="page-title">📋 レシピ一覧</div>
+        <button class="big-primary-btn" onclick="newRecipe()">＋ 新しい料理</button>
+      </div>
+      <input id="search-recipe" class="big-search" placeholder="🔍 料理名で探す" oninput="renderRecipeList()">
+      <div class="big-cat-tabs" id="recipe-cat-tabs"></div>
+      <div id="recipe-list" class="recipe-grid"></div>
+    </div>
+
+    <!-- ============== 🧮 原価計算 (レシピ編集) ============== -->
+    <div id="view-edit" style="display:none;">
+      <div class="edit-header-simple">
+        <button class="back-btn-big" onclick="showTab('list')">← 戻る</button>
+        <input id="edit-name" class="edit-title-input-big" placeholder="料理の名前" oninput="autoSaveCurrent()">
+        <button class="more-btn" onclick="toggleEditMenu()" aria-label="メニュー">⋮</button>
+        <div class="more-menu" id="edit-more-menu" style="display:none">
+          <button onclick="duplicateCurrent()">📋 複製する</button>
+          <button onclick="exportCurrentRecipeCSV()">📤 この料理だけExcel保存</button>
+          <button class="danger" onclick="deleteCurrent()">🗑 削除する</button>
+        </div>
+      </div>
+
+      <!-- 大KPI -->
+      <div class="kpi-big-card-staff">
+        <div class="big-kpi-grid">
+          <div class="big-kpi">
+            <div class="big-kpi-label">1皿の原価</div>
+            <div id="plate-cost-big" class="big-metric muted">¥0</div>
+          </div>
+          <div class="big-kpi">
+            <div class="big-kpi-label">原価率</div>
+            <div id="cr-big" class="big-metric muted">–</div>
+          </div>
+          <div class="big-kpi">
+            <div class="big-kpi-label">粗利</div>
+            <div id="margin-big" class="big-metric muted">–</div>
+          </div>
+        </div>
+        <div class="cr-status-band" id="cr-status-band">販売価格を入力すると粗利が見えます</div>
+      </div>
+
+      <!-- 販売価格 -->
+      <div class="staff-card">
+        <div class="staff-card-title">💴 販売価格</div>
+        <div class="big-input-row">
+          <span class="yen-prefix">¥</span>
+          <input type="number" id="edit-selling-price" class="big-input" step="10" value="0" oninput="autoSaveCurrent()" placeholder="0">
+        </div>
+        <div class="muted-tip">値段を入れると粗利と原価率が自動で出ます</div>
+      </div>
+
+      <!-- 材料 -->
+      <div class="staff-card">
+        <div class="staff-card-title">🥬 材料</div>
+        <div id="item-list" class="item-list-staff"></div>
+        <button class="big-primary-btn full" onclick="openIngPicker()">＋ 材料を追加する</button>
+      </div>
+
+      <!-- 詳細設定(畳み込み) -->
+      <details class="details-card">
+        <summary>⚙️ 詳細設定 (人前・目標など)</summary>
+        <div class="grid-2-staff">
+          <label class="big-label">何人前 / 1皿
+            <input type="number" id="edit-servings" class="big-input small" step="1" min="1" value="1" oninput="autoSaveCurrent()">
+          </label>
+          <label class="big-label">目標原価率 (%)
+            <input type="number" id="edit-target-cr" class="big-input small" step="0.1" value="30" oninput="autoSaveCurrent()">
+          </label>
+          <label class="big-label">目標粗利 (円・任意)
+            <input type="number" id="edit-target-margin" class="big-input small" step="10" value="0" oninput="autoSaveCurrent()">
+          </label>
+          <label class="big-label">カテゴリ (任意)
+            <input id="edit-category" class="big-input small" placeholder="和食/中華/洋食..." oninput="autoSaveCurrent()" list="category-suggestions">
+            <datalist id="category-suggestions">
+              <option value="和食"><option value="中華"><option value="洋食"><option value="麺類">
+              <option value="丼物"><option value="サイド"><option value="前菜"><option value="デザート">
+              <option value="ドリンク">
+            </datalist>
+          </label>
+        </div>
+        <label class="big-label">メモ
+          <textarea id="edit-notes" class="big-input" rows="2" placeholder="調理メモ(任意)" oninput="autoSaveCurrent()"></textarea>
+        </label>
+      </details>
+
+      <!-- 売値と利益を見る(旧:販売価格シミュレーター) -->
+      <details class="details-card">
+        <summary>📊 売値と利益を見る</summary>
+        <div class="sugg-grid">
+          <div class="sugg-card">
+            <div class="sugg-label">おすすめ販売価格<br><small>(目標原価率から)</small></div>
+            <div id="sim-sugg-by-ratio" class="sugg-value accent">–</div>
+          </div>
+          <div class="sugg-card">
+            <div class="sugg-label">おすすめ販売価格<br><small>(目標粗利から)</small></div>
+            <div id="sim-sugg-by-margin" class="sugg-value accent">–</div>
+          </div>
+        </div>
+        <label class="big-label">この値段ならどう?
+          <div class="big-input-row">
+            <span class="yen-prefix">¥</span>
+            <input type="number" id="sim-trial-price" class="big-input" step="10" placeholder="任意の販売価格" oninput="recompute()">
+          </div>
+        </label>
+        <div id="sim-trial-result" class="sim-trial-result">値段を入れると結果が出ます</div>
+        <div class="ing-table-wrap">
+          <table class="ing-table compact">
+            <thead><tr><th>販売価格</th><th>原価率</th><th>粗利</th></tr></thead>
+            <tbody id="sim-price-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <!-- 原価詳細 -->
+      <details class="details-card">
+        <summary>📑 材料ごとの原価内訳</summary>
+        <div class="ing-table-wrap">
+          <table class="ing-table compact">
+            <thead><tr><th>材料</th><th>使用量</th><th>原価</th><th>割合</th></tr></thead>
+            <tbody id="cost-detail-tbody"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <div class="save-stamp-bar"><span id="save-stamp">自動保存されます</span></div>
+    </div>
+
+    <!-- ============== 💴 食材価格 (閲覧用) ============== -->
+    <div id="view-price" style="display:none;">
+      <div class="page-header">
+        <div class="page-title">💴 食材価格</div>
+        <button class="ghost-btn-big" onclick="showTab('admin')">✏️ 編集する(管理者)</button>
+      </div>
+      <input id="search-price" class="big-search" placeholder="🔍 食材名で探す" oninput="renderPriceView()">
+      <div class="big-cat-tabs" id="price-cat-tabs"></div>
+      <div class="muted-tip" id="price-summary"></div>
+      <div id="price-list"></div>
+    </div>
+
+    <!-- ============== ⚙️ 管理者メニュー ============== -->
+    <div id="view-admin" style="display:none;">
+      <div class="page-header">
+        <div class="page-title">⚙️ 管理者メニュー</div>
+      </div>
+
+      <!-- 食材マスタ編集 -->
+      <details class="admin-section" open>
+        <summary>🥬 食材マスタ 編集</summary>
         <div class="toolbar-row">
           <select id="filter-master-category" class="toolbar-select" onchange="renderMaster()">
             <option value="all">カテゴリ: すべて</option>
@@ -212,21 +263,49 @@
         </div>
         <div class="action-row">
           <button class="primary-btn" onclick="addIngredient()">＋ 食材を追加</button>
-          <button class="ghost-btn" onclick="seedVegetables()">🥬 野菜(27)</button>
-          <button class="ghost-btn" onclick="seedMeats()">🥩 肉(19)</button>
-          <button class="ghost-btn" onclick="seedFish()">🐟 魚(20)</button>
-          <button class="ghost-btn" onclick="seedSeasonings()">🧂 調味料(32)</button>
-          <button class="ghost-btn" onclick="seedMaster()">🥟 餃子一式</button>
         </div>
-        <div class="muted-note">🟢 市場価格(週次等で更新) / 🔵 仕入れ価格(安定) / 🟠 都度入力(魚など変動大) / 🟣 固定価格(契約等)</div>
         <div id="master-list"></div>
-      </div>
-    </div>
+      </details>
 
-    <!-- ============== 設定 ============== -->
-    <div id="view-settings" style="display:none;">
-      <div class="section-card">
-        <div class="section-title">☁️ Firebase 同期(複数端末・複数人で共有)</div>
+      <!-- データ操作 -->
+      <details class="admin-section">
+        <summary>💾 バックアップ・Excel保存</summary>
+        <div class="action-row">
+          <button class="primary-btn" onclick="exportAll()">📤 バックアップ保存 (JSON)</button>
+          <label class="ghost-btn file-btn">📥 バックアップ読込<input type="file" accept="application/json" onchange="importAll(event)" hidden></label>
+        </div>
+        <div class="action-row">
+          <button class="ghost-btn" onclick="exportIngredientsCSV()">🥬 食材を Excel用に保存</button>
+          <button class="ghost-btn" onclick="exportRecipesCSV()">📋 レシピを Excel用に保存</button>
+          <button class="ghost-btn" onclick="exportCostResultsCSV()">💹 原価結果を Excel用に保存</button>
+        </div>
+        <div class="muted-note">バックアップは丸ごと保存。Excel用は経理共有向け。</div>
+      </details>
+
+      <!-- サンプル投入 -->
+      <details class="admin-section">
+        <summary>🌱 サンプル食材を一括追加</summary>
+        <div class="action-row">
+          <button class="primary-btn" onclick="seedVegetables()">🥬 野菜 27件</button>
+          <button class="primary-btn" onclick="seedMeats()">🥩 肉 19件</button>
+          <button class="primary-btn" onclick="seedFish()">🐟 魚 20件</button>
+          <button class="primary-btn" onclick="seedSeasonings()">🧂 調味料 32件</button>
+        </div>
+        <div class="muted-note">食材マスタが空のときの初期投入用。重複はスキップされます。</div>
+      </details>
+
+      <!-- 餃子モード(隠し機能) -->
+      <details class="admin-section">
+        <summary>🥟 餃子専用モード(店舗別)</summary>
+        <div class="action-row">
+          <button class="ghost-btn" onclick="seedAll()">🥟 炭火焼鶏餃子 一式 (食材+レシピ)</button>
+        </div>
+        <div class="muted-note">餃子店向け 17食材+レシピを一括投入</div>
+      </details>
+
+      <!-- Firebase 同期 -->
+      <details class="admin-section">
+        <summary>☁️ Firebase 同期(複数端末で共有)</summary>
         <div id="fb-status-panel" class="fb-status-panel">
           <div class="fb-status-line">
             <span class="fb-status-dot" id="fb-dot">🔵</span>
@@ -260,65 +339,73 @@
             <button class="primary-btn" onclick="fbSaveConfig()">💾 config を保存して接続</button>
             <button class="ghost-btn" onclick="fbClearConfig()">設定をクリア</button>
           </div>
-          <details style="margin-top:10px">
-            <summary>Firestore セキュリティルール(そのままコピー)</summary>
-            <pre class="code-block">rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
-  }
-}</pre>
-          </details>
         </details>
-      </div>
+      </details>
 
-      <div class="section-card">
-        <div class="section-title">データ バックアップ</div>
+      <!-- 危険 -->
+      <details class="admin-section danger-section">
+        <summary>⚠️ 全データを削除</summary>
         <div class="action-row">
-          <button class="primary-btn" onclick="exportAll()">📤 全データ JSON書き出し</button>
-          <label class="ghost-btn file-btn">📥 JSON読み込み<input type="file" accept="application/json" onchange="importAll(event)" hidden></label>
+          <button class="danger-btn-big" onclick="resetAll()">🗑 全データをリセット</button>
         </div>
-        <div class="muted-note">食材マスタとレシピをまとめてバックアップ。読み込み時は重複チェック+既存追加/上書き選択可。</div>
+        <div class="muted-note">食材・レシピを全削除。元に戻せません。バックアップ保存後に実行を推奨。</div>
+      </details>
+
+      <div class="muted-note" style="text-align:center;margin-top:20px">原価計算アプリ v5.0 / 飲食店向け / データはこの端末に保存</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============== 食材ピッカー(レシピへの材料追加用) ============== -->
+<div id="ing-picker" class="modal-backdrop" style="display:none;" onclick="closeIngPickerBg(event)">
+  <div class="modal-card picker-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">🥬 材料を選ぶ</div>
+      <button class="back-btn-big" onclick="closeIngPicker()">✕</button>
+    </div>
+    <input id="ing-picker-search" class="big-search picker-search" placeholder="🔍 食材名で検索" oninput="renderIngPicker()">
+    <div class="big-cat-tabs picker-cats" id="ing-picker-cats"></div>
+    <div class="picker-list" id="ing-picker-list"></div>
+    <div class="picker-footer muted-tip">食材が見つからない時は管理者メニューで追加してください</div>
+  </div>
+</div>
+
+<!-- ============== 数量入力モーダル(食材選択後) ============== -->
+<div id="qty-modal" class="modal-backdrop" style="display:none;" onclick="closeQtyModalBg(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="qty-modal-title">使用量を入力</div>
+      <button class="back-btn-big" onclick="closeQtyModal()">✕</button>
+    </div>
+    <div class="qty-modal-body">
+      <div class="qty-ing-name" id="qty-ing-name"></div>
+      <div class="qty-ing-price" id="qty-ing-price"></div>
+      <div class="qty-input-row">
+        <input type="number" id="qty-modal-qty" class="big-input qty-input-large" step="0.1" min="0" placeholder="0">
+        <select id="qty-modal-unit" class="big-input qty-unit-select">
+          <option value="g">g</option>
+          <option value="ml">ml</option>
+          <option value="個">個</option>
+          <option value="枚">枚</option>
+          <option value="本">本</option>
+        </select>
       </div>
-      <div class="section-card">
-        <div class="section-title">CSV 書き出し</div>
-        <div class="action-row">
-          <button class="ghost-btn" onclick="exportIngredientsCSV()">🥬 食材マスタ CSV</button>
-          <button class="ghost-btn" onclick="exportRecipesCSV()">📋 レシピ CSV</button>
-          <button class="ghost-btn" onclick="exportCostResultsCSV()">💹 原価計算結果 CSV</button>
-        </div>
-        <div class="muted-note">Excel で開ける UTF-8 BOM 付き CSV。経理・店舗共有用。</div>
+      <div class="qty-quick-row">
+        <button class="qty-quick-btn" onclick="qtyQuickAdd(10)">+10</button>
+        <button class="qty-quick-btn" onclick="qtyQuickAdd(50)">+50</button>
+        <button class="qty-quick-btn" onclick="qtyQuickAdd(100)">+100</button>
+        <button class="qty-quick-btn" onclick="qtyQuickClear()">クリア</button>
       </div>
-      <div class="section-card">
-        <div class="section-title">サンプル投入</div>
-        <div class="action-row">
-          <button class="primary-btn" onclick="seedVegetables()">🥬 野菜(27件)</button>
-          <button class="primary-btn" onclick="seedMeats()">🥩 肉(19件)</button>
-          <button class="primary-btn" onclick="seedFish()">🐟 魚(20件)</button>
-          <button class="primary-btn" onclick="seedSeasonings()">🧂 調味料(32件)</button>
-        </div>
-        <div class="action-row">
-          <button class="ghost-btn" onclick="seedAll()">🥟 炭火焼鶏餃子 一式(食材+レシピ)</button>
-        </div>
-        <div class="muted-note">野菜=市場価格 / 肉=業務用仕入 / 魚=業務用平均(都度入力フラグ・季節変動大) / 調味料=業務用平均。餃子一式は食材17件+レシピを追加します。</div>
-      </div>
-      <div class="section-card">
-        <div class="section-title">全削除</div>
-        <div class="action-row">
-          <button class="danger-btn" onclick="resetAll()">🗑 全データをリセット</button>
-        </div>
-      </div>
-      <div class="section-card">
-        <div class="section-title">このアプリについて</div>
-        <div class="muted-note">原価計算アプリ v4.0.0 / 汎用飲食店メニュー原価管理 / 静的PWA / データはこの端末に保存</div>
-      </div>
+    </div>
+    <div class="action-row save-row">
+      <button class="ghost-btn-big" onclick="closeQtyModal()">キャンセル</button>
+      <button class="big-primary-btn" onclick="saveQtyModal()">💾 追加する</button>
     </div>
   </div>
 </div>
 
-<!-- 食材編集モーダル -->
+<!-- ============== 食材編集モーダル(管理者用) ============== -->
 <div id="ing-modal" class="modal-backdrop" style="display:none;" onclick="closeIngModalBg(event)">
   <div class="modal-card" onclick="event.stopPropagation()">
     <div class="modal-header">
@@ -335,12 +422,6 @@ service cloud.firestore {
         <option value="皮">皮</option>
         <option value="その他">その他</option>
       </select></label>
-      <label>価格種別<select id="ing-type">
-        <option value="market">🟢 市場価格(野菜等)</option>
-        <option value="purchase">🔵 仕入れ価格(安定)</option>
-        <option value="spot">🟠 都度入力(魚等)</option>
-        <option value="fixed">🟣 固定価格(契約)</option>
-      </select></label>
       <label>仕入単位<select id="ing-unit">
         <option value="kg">kg</option>
         <option value="L">L</option>
@@ -349,15 +430,26 @@ service cloud.firestore {
         <option value="本">本</option>
         <option value="袋">袋</option>
       </select></label>
+      <label>実仕入価格(円/単位)<input type="number" id="ing-actual" step="0.01" placeholder="実際の仕入価格"></label>
       <label>仕入先<input type="text" id="ing-supplier" placeholder="(任意) 例: ○○商店"></label>
-      <label>基準価格(円/単位)<input type="number" id="ing-standard" step="0.01" placeholder="基準/定価"></label>
-      <label>実仕入価格(円/単位)<input type="number" id="ing-actual" step="0.01" placeholder="実際の仕入"></label>
-      <label>標準歩留まり(%)<input type="number" id="ing-yield" step="0.1" min="0" max="100" value="100"></label>
-      <label>ロス率(%)<input type="number" id="ing-loss" step="0.1" min="0" max="100" value="0" title="搬送・保管ロス等"></label>
-      <label class="full-width chip-row"><input type="checkbox" id="ing-variable"> 変動価格(都度確認)</label>
-      <label class="full-width">メモ<input type="text" id="ing-memo" placeholder="(任意)"></label>
+      <label>メモ<input type="text" id="ing-memo" placeholder="(任意)"></label>
       <label class="full-width readonly"><span>最終更新</span><output id="ing-last-updated">–</output></label>
     </div>
+    <details style="margin-top:8px">
+      <summary class="muted-sub">詳細設定 (価格種別 / 使える割合 / 減る分)</summary>
+      <div class="grid-2" style="margin-top:8px">
+        <label>価格種別<select id="ing-type">
+          <option value="market">🟢 市場価格(野菜等)</option>
+          <option value="purchase">🔵 仕入れ価格(安定)</option>
+          <option value="spot">🟠 都度入力(魚等)</option>
+          <option value="fixed">🟣 固定価格(契約)</option>
+        </select></label>
+        <label>基準価格(円/単位)<input type="number" id="ing-standard" step="0.01" placeholder="基準/定価"></label>
+        <label>使える割合(%)<input type="number" id="ing-yield" step="0.1" min="0" max="100" value="100" title="歩留まり"></label>
+        <label>減る分(%)<input type="number" id="ing-loss" step="0.1" min="0" max="100" value="0" title="ロス率: 搬送・保管ロス等"></label>
+        <label class="full-width chip-row"><input type="checkbox" id="ing-variable"> 変動価格(都度確認)</label>
+      </div>
+    </details>
     <div class="history-section">
       <div class="history-title">価格変更履歴</div>
       <div id="ing-history-list"></div>
@@ -369,7 +461,7 @@ service cloud.firestore {
   </div>
 </div>
 
-<script src="src/main.js?v=20260424r"></script>
-<script src="src/firebase-sync.js?v=20260424r"></script>
+<script src="src/main.js?v=20260427r"></script>
+<script src="src/firebase-sync.js?v=20260427r"></script>
 </body>
 </html>

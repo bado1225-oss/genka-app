@@ -1,383 +1,667 @@
+/* 原価計算アプリ v5.0 - スタッフ向けシンプルUI */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 :root {
-  --bg: #f3f1ec;
+  --bg: #f5f3ec;
   --card: #ffffff;
   --ink: #1f2a24;
   --ink-sub: #5b6b62;
   --line: #e4e2db;
   --accent: #2d4a3a;
   --accent-2: #3f6b53;
-  --warn: #b8860b;
-  --danger: #9d3b2a;
+  --accent-light: #e6f0ea;
+  --warn: #d18b1d;
+  --warn-bg: #fdf3df;
+  --danger: #b53c2a;
+  --danger-bg: #fbecea;
+  --good: #2e8b57;
+  --good-bg: #e6f3ec;
   --radius: 14px;
-  --shadow: 0 2px 8px rgba(31,42,36,0.06);
+  --shadow: 0 2px 10px rgba(31,42,36,0.07);
+  --shadow-lg: 0 4px 18px rgba(31,42,36,0.10);
 }
-html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; font-size: 15px; -webkit-text-size-adjust: 100%; }
+html, body {
+  margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
 input, select, button, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 input[type=number] { -moz-appearance: textfield; }
 input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+button { cursor: pointer; }
 
-.app { max-width: 960px; margin: 0 auto; padding: 0 12px env(safe-area-inset-bottom) 12px; }
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 14px calc(80px + env(safe-area-inset-bottom)) 14px;
+}
 
-.header { padding: 14px 4px 6px; }
+/* ============== ヘッダー ============== */
+.header { padding: 14px 4px 10px; }
 .header-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.header-title-wrap h1 { margin: 0; font-size: 20px; letter-spacing: .02em; color: var(--accent); }
+.header-title-wrap { cursor: pointer; }
+.header-title-wrap h1 { margin: 0; font-size: 22px; letter-spacing: .02em; color: var(--accent); }
 .header-sub { color: var(--ink-sub); font-size: 12px; margin-top: 2px; }
-.header-actions { display: flex; gap: 6px; }
-.header-icon-btn { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 18px; box-shadow: var(--shadow); cursor: pointer; position: relative; }
+.header-actions { display: flex; gap: 8px; }
+.header-icon-btn {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; font-size: 20px; box-shadow: var(--shadow); position: relative;
+  min-height: 48px; min-width: 48px;
+}
 .header-icon-btn:hover { background: #faf8f3; }
-.header-icon-btn[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  padding: 4px 9px;
-  background: var(--ink);
-  color: #fff;
-  border-radius: 6px;
-  font-size: 11.5px;
+
+/* ============== 下部タブ ============== */
+.bottom-tabs {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #fff;
+  border-top: 1px solid var(--line);
+  display: flex; gap: 0;
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom)) 4px;
+  z-index: 80;
+  box-shadow: 0 -2px 12px rgba(31,42,36,0.06);
+}
+.bottom-tab {
+  flex: 1; border: 0; background: transparent;
+  padding: 6px 2px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--ink-sub); font-size: 11px; font-weight: 600;
+  border-radius: 10px;
+  min-height: 56px;
+}
+.bottom-tab.active { color: var(--accent); background: var(--accent-light); }
+.bt-ico { font-size: 22px; line-height: 1; }
+.bt-lbl { font-size: 11px; }
+
+.view-wrap { padding-bottom: 24px; }
+
+/* ============== 共通 大きなボタン/入力 ============== */
+.big-primary-btn {
+  background: var(--accent); color: #fff; border: 0;
+  padding: 14px 20px; border-radius: 12px;
+  font-weight: 700; font-size: 16px;
+  min-height: 52px;
+  box-shadow: var(--shadow);
+}
+.big-primary-btn:hover { background: var(--accent-2); }
+.big-primary-btn.full { width: 100%; }
+.ghost-btn-big {
+  background: #fff; color: var(--accent); border: 2px solid var(--line);
+  padding: 12px 18px; border-radius: 12px;
+  font-weight: 700; font-size: 15px;
+  min-height: 48px;
+}
+.ghost-btn-big:hover { background: var(--accent-light); border-color: var(--accent-2); }
+.danger-btn-big {
+  background: #fff; color: var(--danger); border: 2px solid #e6c4be;
+  padding: 14px 20px; border-radius: 12px;
+  font-weight: 700; font-size: 16px;
+  min-height: 52px;
+}
+.danger-btn-big:hover { background: var(--danger-bg); }
+.back-btn-big {
+  background: transparent; color: var(--accent); border: 0;
+  padding: 10px 12px;
+  font-weight: 700; font-size: 16px;
+  min-height: 48px;
   white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(-3px);
-  transition: opacity 0.15s, transform 0.15s;
-  z-index: 50;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-}
-.header-icon-btn[data-tip]:hover::after,
-.header-icon-btn[data-tip]:focus::after {
-  opacity: 1;
-  transform: translateY(0);
+  flex-shrink: 0;
 }
 
-.dashboard { margin-top: 8px; }
-.hero-card { background: linear-gradient(180deg, #ffffff 0%, #f7f5ee 100%); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); }
-.hero-top { display: flex; justify-content: space-between; align-items: flex-start; }
-.hero-title { font-weight: 700; color: var(--accent); font-size: 16px; }
-.hero-stamp { color: var(--ink-sub); font-size: 12px; }
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
-.kpi { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-.kpi-label { color: var(--ink-sub); font-size: 12px; }
-.kpi-value { font-weight: 700; font-size: 18px; color: var(--ink); }
-.kpi-value.accent { color: var(--accent-2); }
+.big-search {
+  width: 100%;
+  background: #fff; border: 2px solid var(--line); border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 16px;
+  min-height: 52px;
+  margin: 4px 0 12px;
+  box-shadow: var(--shadow);
+}
+.big-search:focus { border-color: var(--accent-2); outline: none; }
 
-.main-segment-tabs { display: flex; gap: 6px; margin: 12px 0 10px; background: #ebe8df; padding: 4px; border-radius: 12px; }
-.main-segment-btn { flex: 1; border: 0; background: transparent; padding: 10px 6px; border-radius: 9px; cursor: pointer; font-weight: 600; color: var(--ink-sub); font-size: 13.5px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.main-segment-btn.active { background: #fff; color: var(--accent); box-shadow: var(--shadow); }
-.seg-icon { font-size: 15px; }
+.big-input {
+  background: #fff; border: 2px solid var(--line); border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 18px; font-weight: 600;
+  width: 100%;
+  min-height: 52px;
+}
+.big-input.small { font-size: 16px; min-height: 48px; padding: 12px 14px; }
+.big-input:focus { border-color: var(--accent-2); outline: none; }
+.big-input-row {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 2px solid var(--line); border-radius: 12px;
+  padding: 4px 14px;
+  min-height: 52px;
+}
+.big-input-row .yen-prefix {
+  font-size: 22px; font-weight: 700; color: var(--accent); flex-shrink: 0;
+}
+.big-input-row input {
+  border: 0 !important; background: transparent !important; padding: 12px 0 !important;
+  font-size: 22px; font-weight: 700;
+  flex: 1; min-height: auto;
+}
+.big-input-row input:focus { outline: none; }
 
-.view-wrap { padding-bottom: 60px; }
+.big-label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 14px; color: var(--ink-sub); font-weight: 600;
+}
 
+.muted-tip { color: var(--ink-sub); font-size: 13px; margin: 4px 2px; }
+.muted-note { color: var(--ink-sub); font-size: 12.5px; margin: 6px 2px; }
+.muted-sub { color: var(--ink-sub); font-size: 12px; }
+.muted { color: var(--ink-sub); }
+
+/* ============== 🏠 ホーム画面 ============== */
+.home-greeting {
+  background: linear-gradient(180deg, #ffffff 0%, var(--accent-light) 100%);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  margin-top: 4px;
+  box-shadow: var(--shadow);
+}
+.home-hello { font-size: 22px; font-weight: 700; color: var(--accent); }
+.home-date { color: var(--ink-sub); font-size: 13px; margin-top: 2px; }
+.home-tip { color: var(--ink-sub); font-size: 14px; margin-top: 10px; }
+
+.home-tile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+.home-tile {
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  padding: 22px 16px;
+  text-align: left;
+  box-shadow: var(--shadow);
+  min-height: 140px;
+  display: flex; flex-direction: column;
+  transition: transform .12s, box-shadow .12s;
+}
+.home-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.home-tile:active { transform: translateY(0); }
+.home-tile.primary { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); color: #fff; border-color: transparent; }
+.home-tile.primary .home-tile-desc { color: #d6e6dc; }
+.home-tile.dark { background: linear-gradient(135deg, #4a4a4a 0%, #2c2c2c 100%); color: #fff; border-color: transparent; }
+.home-tile.dark .home-tile-desc { color: #c8c8c8; }
+.home-tile-icon { font-size: 36px; line-height: 1; margin-bottom: 8px; }
+.home-tile-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.home-tile-desc { font-size: 12.5px; color: var(--ink-sub); line-height: 1.4; }
+
+.home-mini-kpi {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.home-mini-kpi .mini-kpi {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.home-mini-kpi .mini-kpi-label { font-size: 11px; color: var(--ink-sub); }
+.home-mini-kpi .mini-kpi-value { font-size: 20px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+.home-mini-kpi .mini-kpi-value.warn { color: var(--warn); }
+
+/* ============== ページヘッダー ============== */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 6px 0 12px;
+  flex-wrap: wrap;
+}
+.page-title { font-size: 22px; font-weight: 700; color: var(--accent); }
+
+/* ============== 大カテゴリタブ ============== */
+.big-cat-tabs {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 2px 0 8px;
+  margin-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.big-cat-tabs::-webkit-scrollbar { display: none; }
+.big-cat-btn {
+  flex-shrink: 0;
+  background: #fff; border: 2px solid var(--line); border-radius: 100px;
+  padding: 10px 18px;
+  font-weight: 700; font-size: 14px;
+  color: var(--ink-sub);
+  min-height: 44px;
+}
+.big-cat-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.big-cat-btn:hover:not(.active) { background: var(--accent-light); }
+.big-cat-btn .cnt { font-size: 12px; opacity: .7; margin-left: 4px; }
+
+/* ============== 📋 レシピ一覧 ============== */
+.recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.recipe-card-staff {
+  background: #fff; border: 2px solid var(--line); border-radius: 16px;
+  padding: 16px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform .12s, border-color .12s;
+  position: relative;
+  min-height: 130px;
+}
+.recipe-card-staff:hover { transform: translateY(-2px); border-color: var(--accent-2); }
+.recipe-card-staff .rc-cat-tag {
+  display: inline-block; background: var(--accent-light); color: var(--accent);
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 100px;
+}
+.recipe-card-staff .rc-name {
+  font-size: 18px; font-weight: 700; margin-top: 8px; color: var(--ink);
+}
+.recipe-card-staff .rc-meta {
+  display: flex; gap: 14px; margin-top: 12px;
+  font-size: 13px; color: var(--ink-sub);
+}
+.recipe-card-staff .rc-meta b { font-size: 16px; color: var(--ink); font-weight: 700; }
+.recipe-card-staff .rc-cr-pill {
+  position: absolute; top: 16px; right: 16px;
+  font-size: 14px; font-weight: 700; padding: 6px 12px; border-radius: 100px;
+}
+.recipe-card-staff .rc-cr-pill.good { background: var(--good-bg); color: var(--good); }
+.recipe-card-staff .rc-cr-pill.warn { background: var(--warn-bg); color: var(--warn); }
+.recipe-card-staff .rc-cr-pill.high { background: var(--danger-bg); color: var(--danger); }
+.recipe-card-staff .rc-cr-pill.muted { background: #f0eee7; color: var(--ink-sub); }
+
+.empty-note {
+  text-align: center; color: var(--ink-sub);
+  padding: 40px 16px; background: #fff;
+  border: 2px dashed var(--line); border-radius: 14px;
+  font-size: 15px;
+}
+.empty-note.small { padding: 20px 12px; font-size: 13px; }
+
+/* ============== 🧮 編集画面 ============== */
+.edit-header-simple {
+  display: flex; align-items: center; gap: 6px;
+  margin: 4px 0 12px;
+  position: relative;
+  width: 100%;
+}
+.edit-title-input-big {
+  flex: 1 1 0;
+  min-width: 0;
+  background: #fff; border: 2px solid var(--line); border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 700; font-size: 17px;
+  min-height: 48px;
+  width: 100%;
+}
+.edit-title-input-big:focus { border-color: var(--accent-2); outline: none; }
+.more-btn {
+  background: #fff; border: 2px solid var(--line); border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 22px; font-weight: 700;
+  min-height: 48px; min-width: 48px;
+}
+.more-menu {
+  position: absolute; top: 56px; right: 0;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  padding: 6px; min-width: 220px;
+  box-shadow: var(--shadow-lg);
+  z-index: 60;
+}
+.more-menu button {
+  display: block; width: 100%; text-align: left;
+  background: transparent; border: 0;
+  padding: 12px 14px; font-size: 14px;
+  border-radius: 8px;
+  color: var(--ink);
+}
+.more-menu button:hover { background: var(--accent-light); }
+.more-menu button.danger { color: var(--danger); }
+.more-menu button.danger:hover { background: var(--danger-bg); }
+
+/* KPI ビッグカード */
+.kpi-big-card-staff {
+  background: #fff; border: 2px solid var(--line); border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+}
+.big-kpi-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+}
+.big-kpi { text-align: center; padding: 8px 4px; }
+.big-kpi-label { font-size: 12px; color: var(--ink-sub); font-weight: 600; }
+.big-metric { font-size: 26px; font-weight: 700; margin-top: 4px; }
+.big-metric.muted { color: var(--ink-sub); }
+.big-metric.cr-low { color: var(--good); }
+.big-metric.cr-mid { color: var(--warn); }
+.big-metric.cr-high { color: var(--danger); }
+.big-metric.accent { color: var(--accent); }
+.cr-status-band {
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--accent-light); border-radius: 10px;
+  font-size: 13px; color: var(--accent); text-align: center;
+  font-weight: 600;
+}
+.cr-status-band.good { background: var(--good-bg); color: var(--good); }
+.cr-status-band.warn { background: var(--warn-bg); color: var(--warn); }
+.cr-status-band.high { background: var(--danger-bg); color: var(--danger); }
+
+/* スタッフカード */
+.staff-card {
+  background: #fff; border: 2px solid var(--line); border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.staff-card-title {
+  font-size: 16px; font-weight: 700; color: var(--accent);
+  margin-bottom: 12px;
+}
+
+/* 材料リスト(スタッフ向け) */
+.item-list-staff { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.item-card-staff {
+  background: #faf8f3;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.item-card-staff .ic-name {
+  flex: 1; font-weight: 700; font-size: 15px; color: var(--ink);
+}
+.item-card-staff .ic-qty {
+  font-size: 14px; color: var(--ink-sub); font-weight: 600;
+}
+.item-card-staff .ic-cost {
+  font-size: 15px; font-weight: 700; color: var(--accent);
+  min-width: 60px; text-align: right;
+}
+.item-card-staff .ic-del {
+  background: transparent; border: 0; color: var(--danger);
+  padding: 6px 8px; font-size: 18px; border-radius: 8px;
+}
+.item-card-staff .ic-del:hover { background: var(--danger-bg); }
+.item-card-staff.no-ing { background: var(--warn-bg); }
+.item-card-staff .ic-edit-area { flex: 1; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.item-card-staff .ic-edit-area:hover .ic-name { color: var(--accent-2); }
+
+/* 詳細セクション */
+.details-card {
+  background: #fff; border: 2px solid var(--line); border-radius: 16px;
+  padding: 0;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.details-card > summary {
+  padding: 14px 16px;
+  font-weight: 700; font-size: 15px;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.details-card > summary::-webkit-details-marker { display: none; }
+.details-card > summary::after {
+  content: '▼'; font-size: 11px; opacity: .6; transition: transform .2s;
+}
+.details-card[open] > summary::after { transform: rotate(180deg); }
+.details-card[open] > summary { border-bottom: 1px solid var(--line); }
+.details-card > *:not(summary) { padding: 14px 16px; }
+.details-card > .ing-table-wrap { padding: 0 16px 14px; }
+
+.grid-2-staff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* おすすめ価格 */
+.sugg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sugg-card {
+  background: #faf8f3; border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px; text-align: center;
+}
+.sugg-label { font-size: 12px; color: var(--ink-sub); }
+.sugg-label small { font-size: 10.5px; }
+.sugg-value { font-size: 22px; font-weight: 700; margin-top: 6px; }
+.sugg-value.accent { color: var(--accent); }
+.sugg-sub { font-size: 11px; margin-top: 2px; }
+.sim-trial-result {
+  margin-top: 8px; padding: 10px 12px;
+  background: var(--accent-light); border-radius: 10px;
+  font-size: 14px; color: var(--accent); font-weight: 600;
+}
+.sim-trial-result .cr-low { color: var(--good); }
+.sim-trial-result .cr-mid { color: var(--warn); }
+.sim-trial-result .cr-high { color: var(--danger); }
+.sim-trial-result .accent { color: var(--accent); }
+
+/* 自動保存スタンプ */
+.save-stamp-bar {
+  text-align: center; padding: 16px;
+  color: var(--ink-sub); font-size: 12px;
+}
+
+/* ============== 📋 食材ピッカーモーダル ============== */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(31,42,36,0.5);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0;
+}
+@media (min-width: 540px) {
+  .modal-backdrop { align-items: center; padding: 20px; }
+}
+.modal-card {
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  padding: 16px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+@media (min-width: 540px) {
+  .modal-card { border-radius: 20px; max-height: 86vh; }
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal-title { font-size: 18px; font-weight: 700; color: var(--accent); }
+
+.picker-card { display: flex; flex-direction: column; }
+.picker-search { margin-bottom: 8px; }
+.picker-cats { padding: 0 0 8px; margin-bottom: 6px; }
+.picker-list {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  max-height: 50vh; overflow-y: auto;
+  padding: 4px;
+  margin: 4px -4px 0;
+}
+@media (max-width: 380px) { .picker-list { grid-template-columns: 1fr; } }
+.picker-item {
+  background: #fff; border: 2px solid var(--line); border-radius: 12px;
+  padding: 12px 10px;
+  text-align: left;
+  min-height: 64px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.picker-item:hover, .picker-item:active { background: var(--accent-light); border-color: var(--accent-2); }
+.picker-item .pi-name { font-weight: 700; font-size: 14px; color: var(--ink); }
+.picker-item .pi-price { font-size: 12px; color: var(--accent); font-weight: 600; }
+.picker-item .pi-cat { font-size: 11px; color: var(--ink-sub); }
+.picker-footer { text-align: center; padding: 8px 0 4px; }
+
+/* ============== 数量入力モーダル ============== */
+.qty-modal-body { padding: 8px 0 12px; }
+.qty-ing-name { font-size: 18px; font-weight: 700; color: var(--ink); }
+.qty-ing-price { font-size: 13px; color: var(--ink-sub); margin: 4px 0 14px; }
+.qty-input-row { display: flex; gap: 8px; }
+.qty-input-large { flex: 2; font-size: 24px !important; text-align: center; }
+.qty-unit-select { flex: 1; }
+.qty-quick-row { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.qty-quick-btn {
+  flex: 1; min-width: 60px;
+  background: var(--accent-light); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px;
+  font-weight: 600; color: var(--accent);
+  min-height: 44px;
+}
+.qty-quick-btn:hover { background: var(--accent); color: #fff; }
+
+/* ============== 💴 食材価格(閲覧) ============== */
+#price-list { display: flex; flex-direction: column; gap: 8px; }
+.price-group-title {
+  font-size: 14px; font-weight: 700; color: var(--accent);
+  margin: 14px 4px 6px;
+}
+.price-row {
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: var(--shadow);
+  min-height: 60px;
+}
+.price-row .pr-name { flex: 1; font-weight: 700; font-size: 15px; }
+.price-row .pr-price { font-size: 17px; font-weight: 700; color: var(--accent); }
+.price-row .pr-updated { font-size: 11px; color: var(--ink-sub); margin-left: 8px; }
+.price-row.stale .pr-updated { color: var(--warn); font-weight: 600; }
+
+/* ============== ⚙️ 管理者メニュー ============== */
+.admin-section {
+  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  padding: 0;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.admin-section > summary {
+  padding: 16px;
+  font-weight: 700; font-size: 15px;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 56px;
+}
+.admin-section > summary::-webkit-details-marker { display: none; }
+.admin-section > summary::after { content: '▼'; font-size: 11px; opacity: .6; transition: transform .2s; }
+.admin-section[open] > summary::after { transform: rotate(180deg); }
+.admin-section[open] > summary { border-bottom: 1px solid var(--line); }
+.admin-section > *:not(summary) { padding-left: 16px; padding-right: 16px; }
+.admin-section > *:last-child:not(summary) { padding-bottom: 16px; }
+.admin-section.danger-section > summary { color: var(--danger); }
+
+/* 管理者の食材リスト(従来からの引継) */
 .toolbar-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
-.toolbar-select, .search-input, .inline-select { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; min-width: 0; }
+.toolbar-select, .search-input, .inline-select {
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; font-size: 14px; min-width: 0;
+  min-height: 44px;
+}
 .search-input { flex: 1; min-width: 160px; }
 
 .action-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
-.primary-btn { background: var(--accent); color: #fff; border: 0; padding: 10px 14px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+.primary-btn { background: var(--accent); color: #fff; border: 0; padding: 12px 16px; border-radius: 10px; font-weight: 600; min-height: 44px; }
 .primary-btn:hover { background: var(--accent-2); }
-.ghost-btn { background: #fff; color: var(--accent); border: 1px solid var(--line); padding: 10px 12px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+.ghost-btn { background: #fff; color: var(--accent); border: 1px solid var(--line); padding: 12px 14px; border-radius: 10px; font-weight: 600; min-height: 44px; }
 .ghost-btn:hover { background: #faf8f3; }
 .ghost-btn:disabled { opacity: .4; cursor: not-allowed; }
-.danger-btn { background: #fff; color: var(--danger); border: 1px solid #e6cfc9; padding: 8px 12px; border-radius: 10px; font-weight: 600; cursor: pointer; }
-.danger-btn:hover { background: #fbf2f0; }
-.back-btn { background: transparent; color: var(--accent); border: 0; padding: 8px 6px; font-weight: 600; cursor: pointer; font-size: 14px; }
-.file-btn { display: inline-flex; align-items: center; gap: 6px; }
+.ghost-btn.small { padding: 6px 10px; font-size: 12px; min-height: auto; }
+.danger-btn { background: #fff; color: var(--danger); border: 1px solid #e6cfc9; padding: 10px 14px; border-radius: 10px; font-weight: 600; min-height: 44px; }
+.danger-btn:hover { background: var(--danger-bg); }
+.danger-btn.small { padding: 6px 10px; font-size: 12px; min-height: auto; }
+.back-btn { background: transparent; color: var(--accent); border: 0; padding: 10px 8px; font-weight: 600; font-size: 16px; min-height: 44px; min-width: 44px; }
+.file-btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 
-/* recipe list */
-#recipe-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 6px; }
-.recipe-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; cursor: pointer; box-shadow: var(--shadow); transition: transform .12s; position: relative; }
-.recipe-card:hover { transform: translateY(-1px); }
-.recipe-card.selected { outline: 2px solid var(--accent); }
-.rc-cat { font-size: 11px; color: var(--ink-sub); background: #ebe8df; display: inline-block; padding: 2px 8px; border-radius: 20px; }
-.rc-name { font-weight: 700; margin-top: 6px; font-size: 16px; color: var(--ink); }
-.rc-stats { display: flex; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--ink-sub); }
-.rc-stats b { color: var(--accent-2); font-size: 14px; }
-.empty-note { text-align: center; color: var(--ink-sub); padding: 36px 12px; background: #fff; border: 1px dashed var(--line); border-radius: 12px; }
-
-/* edit pane */
-.edit-header { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
-.edit-title-wrap { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.edit-title-input { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-weight: 700; font-size: 17px; width: 100%; }
-.edit-sub { display: flex; gap: 6px; }
-
-.section-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
-.section-title { font-weight: 700; color: var(--accent); margin-bottom: 10px; font-size: 15px; border-left: 3px solid var(--accent); padding-left: 8px; }
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
-.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-.section-card label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-sub); }
-.section-card label input, .section-card label select { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; color: var(--ink); }
-.section-card label.readonly output { background: #faf8f3; border: 1px dashed var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; font-weight: 600; color: var(--accent-2); }
-
-/* ingredient table */
-.ing-table-wrap { overflow-x: auto; margin: 0 -4px; }
-.ing-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 680px; }
-.ing-table th, .ing-table td { padding: 6px 6px; border-bottom: 1px solid var(--line); text-align: right; }
-.ing-table th { background: #faf8f3; color: var(--ink-sub); font-weight: 600; font-size: 11.5px; position: sticky; top: 0; }
-.ing-table th.col-name, .ing-table td.col-name { text-align: left; }
-.ing-table input { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; text-align: right; }
-.ing-table input.name-input { text-align: left; }
-.ing-table td.col-scaled, .ing-table td.col-cost, .ing-table td.col-per, .ing-table td.col-ratio { color: var(--accent-2); font-weight: 600; }
-.ing-table td.col-del button { background: transparent; border: 0; color: var(--danger); cursor: pointer; font-size: 16px; padding: 2px 6px; }
-.ing-table tfoot td { background: #faf8f3; font-weight: 700; color: var(--ink); border-top: 2px solid var(--line); }
-.ing-table input[type=checkbox] { width: auto; }
-
-/* summary */
-.summary-card { background: linear-gradient(180deg, #ffffff 0%, #f3efe4 100%); }
-.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-.summary-item { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.summary-item .s-label { font-size: 12px; color: var(--ink-sub); }
-.summary-item .s-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
-.summary-item.accent .s-value { color: var(--accent-2); font-size: 22px; }
-.summary-note { font-size: 12px; color: var(--ink-sub); margin-top: 8px; }
-
-.save-row { justify-content: flex-end; }
-.save-stamp { color: var(--ink-sub); font-size: 12px; }
-
-/* tools */
-.scrap-table, .dw-table, .skin-ref-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
-.scrap-table th, .scrap-table td, .dw-table th, .dw-table td, .skin-ref-table th, .skin-ref-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: right; }
-.scrap-table th, .dw-table th, .skin-ref-table th { background: #faf8f3; color: var(--ink-sub); font-weight: 600; font-size: 12px; }
-.scrap-table td:first-child, .skin-ref-table td:first-child, .dw-table td:first-child { text-align: left; }
-.dw-table input { width: 100%; text-align: right; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 13px; }
-.dw-table tfoot th { background: #f3efe4; color: var(--ink); }
-.muted-note { color: var(--ink-sub); font-size: 12px; margin-top: 8px; }
-
-@media (max-width: 600px) {
-  .header-title-wrap h1 { font-size: 18px; }
-  .summary-item.accent .s-value { font-size: 18px; }
-  .edit-title-input { font-size: 15px; }
-  .main-segment-btn { font-size: 12.5px; }
+.master-group { margin-top: 12px; }
+.master-group-title { font-weight: 700; color: var(--accent); margin: 6px 2px; font-size: 14px; }
+.group-count { font-size: 11px; color: var(--ink-sub); font-weight: normal; }
+.ing-row {
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 6px;
+  display: grid; grid-template-columns: 1fr auto; gap: 8px;
+  align-items: center;
 }
-
-/* ===== v2: 食材マスタ・レシピ新UI ===== */
-.empty-note.small { padding: 18px; font-size: 13px; }
-.full-width { grid-column: 1/-1; }
-
-/* 材料カード(レシピ編集) */
-#item-list { display: flex; flex-direction: column; gap: 8px; }
-.item-card { background: #faf8f3; border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-.item-row-main { display: flex; gap: 8px; align-items: center; }
-.item-selects-wrap { display: flex; gap: 6px; flex: 1; min-width: 0; }
-.item-selects-wrap select { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; min-width: 0; }
-.item-cat-select { flex: 0 0 100px; }
-.item-ing-select { flex: 1; }
-.item-ing-select[disabled] { color: var(--ink-sub); background: #faf8f3; }
-@media (max-width: 480px) {
-  .item-selects-wrap { flex-direction: column; gap: 4px; }
-  .item-cat-select { flex: none; }
-}
-.icon-del { background: transparent; border: 0; color: var(--danger); cursor: pointer; font-size: 18px; padding: 4px 8px; }
-.item-row-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.inline-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--ink-sub); }
-.inline-field input { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13px; width: 110px; text-align: right; }
-.inline-field.spot input { border-color: #e0b87a; background: #fffaf2; }
-.inline-field.mul input { width: 70px; }
-.inline-field.yield input { width: 80px; }
-.inline-field.price input { width: 100px; }
-.yield-hint { color: var(--warn); font-size: 11px; }
-.inline-field.price.override input { border-color: #c67b1d; background: #fff7e8; color: #8a4e00; font-weight: 600; }
-.inline-field.price.override > span { color: #c67b1d; font-weight: 600; }
-.reset-link { background: transparent; border: 0; color: var(--accent-2); cursor: pointer; font-size: 11px; padding: 0 4px; font-weight: 600; }
-.reset-link:hover { text-decoration: underline; }
-.price-master-note { color: var(--ink-sub); text-decoration: line-through; font-size: 11px; margin-right: 2px; }
-.price-override-note { color: #c67b1d; font-weight: 600; font-size: 12px; }
-.muted-sub { color: var(--ink-sub); font-size: 11px; margin-left: 2px; }
-.item-card.has-override { border-color: #e0b87a; background: #fffbf4; }
-
-/* ===== v3: ダッシュボード拡張・販売価格シミュ・原価詳細・餃子モード ===== */
-.kpi-value.warn { color: var(--danger); }
-.dash-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 12px; }
-.dash-block { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.dash-block-title { font-weight: 700; color: var(--accent); font-size: 13px; margin-bottom: 6px; }
-.dash-list { list-style: none; padding: 0; margin: 0; font-size: 13px; }
-.dash-list li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--line); gap: 8px; }
-.dash-list li:last-child { border-bottom: 0; }
-.dash-list a { color: var(--accent-2); cursor: pointer; }
-.dash-list a:hover { text-decoration: underline; }
-.dash-val { font-weight: 700; }
-.dash-val.warn { color: var(--danger); }
-.dash-val.accent { color: var(--accent-2); }
-.dash-val.muted { color: var(--ink-sub); font-weight: 500; font-size: 12px; }
-
-/* レシピカード 原価率バッジ */
-.rc-top-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-.rc-cr-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 700; }
-.rc-cr-badge.ok { background: #e8f2ec; color: #2d4a3a; }
-.rc-cr-badge.warn { background: #fae0de; color: #9d3b2a; }
-.recipe-card.over-target { border-color: #e0b5ae; }
-
-/* 販売価格シミュレーター */
-.sim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
-.sim-item { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.sim-item .s-label { font-size: 11px; color: var(--ink-sub); }
-.sim-val { font-size: 16px; font-weight: 700; margin-top: 2px; }
-.sim-val.ok { color: #2d4a3a; }
-.sim-val.warn { color: var(--danger); }
-.sim-val.accent { color: var(--accent-2); }
-.alert-box { margin-top: 10px; padding: 10px 12px; background: #fae0de; border: 1px solid #e0b5ae; border-radius: 8px; color: var(--danger); font-size: 13px; font-weight: 600; }
-
-/* 原価詳細 / 仕込みロット */
-.cost-detail-summary, .lot-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 13px; margin: 6px 0 10px; }
-.cost-detail-summary > div, .lot-summary > div { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.cost-detail-summary .s-label, .lot-summary .s-label { font-size: 11px; color: var(--ink-sub); display: block; }
-.cost-detail-summary .accent, .lot-summary .accent { color: var(--accent-2); font-weight: 700; font-size: 15px; }
-.warn-text { color: var(--warn); font-weight: 700; }
-.ing-table.compact { font-size: 12px; min-width: 420px; }
-.ing-table.compact th, .ing-table.compact td { padding: 5px 6px; }
-
-/* 餃子モード */
-.gyoza-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin: 8px 0; }
-.gyoza-grid > div { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 12px; }
-.gyoza-grid > div .s-label { font-size: 10.5px; color: var(--ink-sub); display: block; }
-.gyoza-grid > div b { font-size: 14px; }
-.gyoza-grid > div b.accent { color: var(--accent-2); }
-.section-subtitle { font-size: 13px; color: var(--accent); font-weight: 700; margin: 10px 0 4px; }
-
-/* 食材マスタ行 拡張 */
-.variable-tag { background: #faefda; color: #c67b1d; font-size: 10.5px; padding: 1px 7px; border-radius: 10px; font-weight: 600; margin-left: 6px; }
-.ing-supplier { color: var(--ink-sub); font-size: 11px; }
-.ing-updated { color: var(--ink-sub); font-size: 11px; }
-.ing-updated.warn { color: var(--danger); font-weight: 600; }
-.ing-row.stale { background: #fff8e8; border-color: #e8d9a2; }
-
-/* 価格履歴 */
-.history-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
-.history-title { font-weight: 700; color: var(--accent); font-size: 13px; margin-bottom: 6px; }
-.history-row { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
-.hist-date { color: var(--ink-sub); }
-.hist-change { font-weight: 600; color: var(--accent-2); }
-.hist-supplier { color: var(--ink-sub); }
-.hist-memo { color: var(--ink-sub); font-size: 11px; }
-.muted.small { font-size: 12px; }
-.chip-row { flex-direction: row !important; align-items: center; gap: 8px; }
-.chip-row input { width: auto !important; }
-
-/* スティッキー保存ボタン */
-.sticky-save { position: sticky; bottom: 10px; z-index: 10; background: rgba(255,255,255,0.95); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; backdrop-filter: blur(6px); margin-top: 16px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); justify-content: flex-end; }
-.primary-btn.big { padding: 12px 22px; font-size: 16px; }
-
-/* 数字入力大きめ */
-.section-card label input[type="number"] { font-size: 15px; font-weight: 600; }
-.inline-field input[type="number"] { font-size: 14px; font-weight: 600; }
-
-@media (max-width: 600px) {
-  .sim-val { font-size: 14px; }
-  .gyoza-grid > div b { font-size: 13px; }
-}
-
-/* ===== v3.1 店内提供特化: 1皿原価大きく表示・原価率色分け ===== */
-.plate-cost-banner { background: linear-gradient(180deg, #f7f5ee 0%, #eee9dc 100%); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; text-align: center; }
-.plate-cost-banner .s-label { font-size: 12px; color: var(--ink-sub); }
-.plate-cost-big { font-size: 34px; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; margin: 4px 0; line-height: 1.1; }
-.plate-cost-big.cr-low { color: #2d4a3a; }
-.plate-cost-big.cr-mid { color: #b8860b; }
-.plate-cost-big.cr-high { color: var(--danger); }
-.plate-cost-sub { font-size: 12px; color: var(--ink-sub); }
-.plate-cost-sub b { color: var(--ink); }
-
-/* 原価率色分け(緑/黄/赤) */
-.cr-low { color: #2d6a47; font-weight: 700; }
-.cr-mid { color: #b8860b; font-weight: 700; }
-.cr-high { color: var(--danger); font-weight: 700; }
-
-/* 餃子モード 1皿原価強調 */
-.gyoza-grid > div b.accent.big { font-size: 18px; color: var(--accent-2); }
-
-@media (max-width: 600px) {
-  .plate-cost-big { font-size: 28px; }
-}
-
-/* ===== v4 汎用原価管理: 3大KPI・色凡例 ===== */
-.kpi-big-card { background: linear-gradient(180deg, #ffffff 0%, #f3efe4 100%); padding: 16px; }
-.big-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.big-kpi { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 8px; text-align: center; }
-.big-kpi-label { font-size: 12px; color: var(--ink-sub); margin-bottom: 4px; }
-.big-metric { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
-.big-metric.cr-low { color: #2d6a47; }
-.big-metric.cr-mid { color: #b8860b; }
-.big-metric.cr-high { color: var(--danger); }
-.big-metric.accent { color: var(--accent-2); }
-.big-metric.muted { color: var(--ink-sub); }
-.sub-kpi-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; padding: 8px 10px; background: #faf8f3; border-radius: 8px; font-size: 12px; color: var(--ink-sub); }
-.sub-kpi-row b { color: var(--ink); font-weight: 700; margin-left: 2px; }
-.color-legend { display: flex; gap: 14px; justify-content: center; margin-top: 10px; font-size: 11px; flex-wrap: wrap; }
-.full-width textarea { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; resize: vertical; font-family: inherit; }
-
-/* item row: qty + unit */
-.inline-field.qty input { width: 110px; font-size: 17px; font-weight: 700; }
-.inline-field.unit select { width: 70px; padding: 8px 8px; }
-
-/* recipe card CR badge (absolute color) */
-.rc-cr-badge.cr-low { background: #dcecd9; color: #2d6a47; }
-.rc-cr-badge.cr-mid { background: #faeec0; color: #856404; }
-.rc-cr-badge.cr-high { background: #fae0de; color: #9d3b2a; }
-.rc-cr-badge.muted { background: #ebe8df; color: var(--ink-sub); }
-
-@media (max-width: 600px) {
-  .big-metric { font-size: 22px; }
-  .big-kpi { padding: 10px 6px; }
-}
-
-/* 販売価格シミュレーション */
-.sugg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 12px; }
-.sugg-card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; text-align: center; }
-.sugg-label { font-size: 12px; color: var(--ink-sub); }
-.sugg-label small { font-size: 10.5px; }
-.sugg-value { font-size: 24px; font-weight: 800; margin: 4px 0; color: var(--accent-2); letter-spacing: -0.02em; }
-.sugg-sub { font-size: 10.5px; }
-.sim-trial-result { background: #faf8f3; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0 12px; font-size: 14px; text-align: center; font-weight: 600; }
-.sim-trial-result .cr-low, .sim-trial-result .cr-mid, .sim-trial-result .cr-high { font-size: 15px; margin-right: 8px; }
-tr.current-price-row { background: #f3efe4; font-weight: 700; }
-tr.current-price-row td { border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
-
-@media (max-width: 600px) {
-  .sugg-value { font-size: 20px; }
-}
-
-/* Firebase 同期 UI */
-.fb-status-panel { background: #faf8f3; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
-.fb-status-line { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.fb-status-dot { font-size: 16px; }
-#fb-user-info { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px; }
-#fb-signin-btn { margin-top: 10px; }
-#fb-config-details summary { cursor: pointer; padding: 6px 0; font-weight: 600; color: var(--accent); }
-#fb-config-input { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 12px; font-family: ui-monospace, Menlo, monospace; resize: vertical; }
-.code-block { background: #f4f2ec; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 11.5px; font-family: ui-monospace, Menlo, monospace; overflow-x: auto; white-space: pre; }
-.inline-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; }
-.inline-chip input { accent-color: var(--accent); }
-.item-row-info { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-sub); flex-wrap: wrap; gap: 6px; padding-top: 4px; border-top: 1px dashed var(--line); }
-.item-cost { color: var(--ink); }
-.item-cost b { color: var(--accent-2); font-size: 14px; }
-.price-badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; font-weight: 700; margin-right: 4px; }
-
-/* 食材マスタ */
-.master-group { margin-top: 14px; }
-.master-group-title { font-weight: 700; color: var(--accent); font-size: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-.group-count { font-size: 11px; color: var(--ink-sub); background: #ebe8df; padding: 1px 7px; border-radius: 10px; font-weight: 500; }
-.ing-row { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+.ing-row.stale { border-color: var(--warn); background: var(--warn-bg); }
 .ing-row-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ing-name { font-weight: 600; color: var(--ink); }
-.ing-price { color: var(--accent-2); font-weight: 700; }
-.ing-row-meta { grid-column: 1; font-size: 11px; color: var(--ink-sub); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.ing-row-meta .ing-price { font-size: 13px; }
-.ing-memo { color: var(--ink-sub); }
-.ing-used { color: var(--accent-2); }
-.ing-unused { color: var(--ink-sub); opacity: .7; }
-.ing-row-actions { grid-row: 1/3; grid-column: 2; display: flex; gap: 4px; }
-.ghost-btn.small, .danger-btn.small { padding: 6px 10px; font-size: 12px; }
+.ing-row-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--ink-sub); grid-column: 1 / -1; }
+.ing-row-actions { display: flex; gap: 6px; }
+.price-badge { padding: 2px 7px; border-radius: 100px; font-size: 11px; font-weight: 700; }
+.ing-name { font-weight: 700; font-size: 14px; }
+.ing-price { font-size: 13px; font-weight: 600; color: var(--accent); }
+.ing-supplier, .ing-memo { color: var(--ink-sub); }
+.ing-updated { font-size: 11px; color: var(--ink-sub); }
+.ing-updated.warn { color: var(--warn); }
+.ing-used { color: var(--accent-2); font-weight: 600; }
+.ing-unused { color: var(--ink-sub); }
+.variable-tag { background: var(--warn-bg); color: var(--warn); padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
 
-/* モーダル */
-.modal-backdrop { position: fixed; inset: 0; background: rgba(31,42,36,.45); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 12px; }
-.modal-card { background: #fff; border-radius: 14px; padding: 16px; max-width: 520px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,.25); max-height: 90vh; overflow-y: auto; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.modal-title { font-weight: 700; color: var(--accent); font-size: 16px; }
-.modal-card .grid-2 label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-sub); }
-.modal-card input, .modal-card select { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 14px; color: var(--ink); }
-.modal-card .save-row { margin-top: 14px; justify-content: flex-end; }
+.fb-status-panel { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 0; }
+.fb-status-line { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
+.fb-status-dot { font-size: 14px; }
+#fb-config-details summary { font-size: 14px; font-weight: 600; color: var(--accent-2); padding: 6px 0; cursor: pointer; }
+#fb-config-input { width: 100%; font-family: monospace; font-size: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.code-block { background: #f5f3ec; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; }
 
-@media (max-width: 600px) {
-  .ing-row { grid-template-columns: 1fr; }
-  .ing-row-actions { grid-row: auto; grid-column: 1; justify-content: flex-end; }
-  .ing-price { margin-left: 0; }
-  .inline-field input { width: 90px; }
+/* テーブル */
+.ing-table-wrap { overflow-x: auto; margin-top: 8px; }
+.ing-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ing-table th, .ing-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+.ing-table th:first-child, .ing-table td:first-child { text-align: left; }
+.ing-table th { background: #faf8f3; color: var(--ink-sub); font-weight: 600; }
+.ing-table .cr-low { color: var(--good); font-weight: 700; }
+.ing-table .cr-mid { color: var(--warn); font-weight: 700; }
+.ing-table .cr-high { color: var(--danger); font-weight: 700; }
+.ing-table .accent { color: var(--accent); }
+.ing-table tr.current-price-row { background: var(--accent-light); }
+
+/* 食材編集モーダル */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid-2 label, .full-width { display: flex; flex-direction: column; font-size: 13px; color: var(--ink-sub); gap: 4px; }
+.full-width { grid-column: 1 / -1; }
+.grid-2 input, .grid-2 select, .full-width input, .full-width select, .full-width textarea {
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; font-size: 14px; color: var(--ink);
+  min-height: 42px;
+}
+.chip-row { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.readonly output { background: #faf8f3; padding: 8px 12px; border-radius: 8px; }
+.history-section { margin-top: 14px; }
+.history-title { font-weight: 700; color: var(--accent); font-size: 13px; margin-bottom: 6px; }
+.history-row {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  padding: 6px 8px; border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.hist-date { color: var(--ink-sub); min-width: 80px; }
+.hist-change b { color: var(--accent); }
+.save-row { justify-content: flex-end; padding-top: 10px; border-top: 1px solid var(--line); margin-top: 12px; }
+
+/* 一致クラス(計算用) */
+.cr-low { color: var(--good); }
+.cr-mid { color: var(--warn); }
+.cr-high { color: var(--danger); }
+.accent { color: var(--accent); }
+.warn { color: var(--warn); }
+
+/* iOS タップ反応の改善 */
+@media (hover: none) {
+  .home-tile:hover, .recipe-card-staff:hover, .picker-item:hover { transform: none; }
+}
+
+/* スクロール時の影 */
+@media (max-width: 540px) {
+  .home-tile-grid { grid-template-columns: 1fr 1fr; }
+  .big-kpi-grid { gap: 4px; }
+  .big-metric { font-size: 22px; }
+  .grid-2-staff { grid-template-columns: 1fr; }
+  .sugg-grid { grid-template-columns: 1fr; }
 }

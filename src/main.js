@@ -21,6 +21,14 @@ const state = {
   selectedListId: null,
   ingModalMode: 'add',
   ingModalId: null,
+  // v5: スタッフUI
+  currentTab: 'home',
+  recipeListCat: 'all',
+  priceCat: 'all',
+  pickerCat: '肉',
+  pickerEditingItemId: null, // null = 新規追加, set = 既存材料を編集
+  qtyEditing: { itemId: null, ingId: null },
+  autoSaveTimer: null,
 };
 
 // ============ ユーティリティ ============
@@ -310,77 +318,79 @@ function costRateClass(cost_ratio){
 
 // ============ タブ制御 ============
 function showTab(tab){
-  const tabs = ['recipes','master','settings'];
+  // 旧タブ名のエイリアス
+  const alias = {recipes:'list', master:'price', settings:'admin'};
+  if(alias[tab]) tab = alias[tab];
+  const tabs = ['home','calc','list','price','admin','edit'];
   tabs.forEach(t => {
     const seg = document.getElementById('seg-'+t);
-    if(seg) seg.classList.toggle('active', t===tab);
+    if(seg) seg.classList.toggle('active', t===tab || (t==='calc' && tab==='edit'));
     const view = document.getElementById('view-'+t);
     if(view) view.style.display = t===tab ? '' : 'none';
   });
-  if(tab==='recipes'){ backToList(); }
-  if(tab==='master'){ renderMaster(); }
-  renderHero();
+  state.currentTab = tab;
+  if(tab==='home'){ renderHome(); }
+  if(tab==='list'){ state.currentRecipeId = null; renderRecipeList(); }
+  if(tab==='price'){ renderPriceView(); }
+  if(tab==='admin'){ renderMaster(); }
+  // ヘッダーサブテキスト
+  const sub = document.getElementById('header-sub');
+  if(sub){
+    const labels = {home:'スタッフ用シンプル画面', list:'登録レシピ一覧', edit:'原価計算', price:'食材の現在価格', admin:'管理者メニュー'};
+    sub.textContent = labels[tab] || '';
+  }
 }
 
-function renderHero(){
+// ホーム→原価計算: レシピがあれば一覧へ、無ければ新規作成
+function goCalc(){
+  if(!state.recipes.length){
+    newRecipe();
+    return;
+  }
+  showTab('list');
+}
+function goCalcOrList(){
+  // 編集中なら編集画面継続、それ以外はレシピ一覧
+  if(state.currentRecipeId && getCurrent()){
+    showTab('edit');
+  } else {
+    showTab('list');
+  }
+}
+
+// ホーム画面: 4タイル + ミニKPI
+function renderHome(){
+  const dateEl = document.getElementById('home-date');
+  if(dateEl){
+    const d = new Date();
+    const days = ['日','月','火','水','木','金','土'];
+    dateEl.textContent = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 (${days[d.getDay()]})`;
+  }
   const recipes = state.recipes.length;
   const ings = state.ingredients.length;
   const calcs = state.recipes.map(r=>({r, c:calcRecipe(r)})).filter(x=>x.c);
   const withSelling = calcs.filter(x=>x.c.selling>0);
-  const avgCR = withSelling.length ? withSelling.reduce((s,x)=>s+x.c.cost_ratio,0)/withSelling.length : 0;
-  // 原価率が35%超(赤)のメニュー (色分け基準に合わせる)
   const highCR = withSelling.filter(x => x.c.cost_ratio*100 > 35);
-  const top5CR = [...withSelling].sort((a,b)=>b.c.cost_ratio-a.c.cost_ratio).slice(0,5);
-  const top5MarginHigh = [...withSelling].sort((a,b)=>b.c.margin-a.c.margin).slice(0,5);
-  const top5MarginLow = [...withSelling].sort((a,b)=>a.c.margin-b.c.margin).slice(0,5);
-  // よく使う食材TOP10
-  const usageCount = {};
-  state.recipes.forEach(r => (r.items||[]).forEach(it => {
-    if(it.ingredient_id) usageCount[it.ingredient_id] = (usageCount[it.ingredient_id]||0) + 1;
-  }));
-  const top10Usage = Object.entries(usageCount)
-    .sort((a,b) => b[1]-a[1]).slice(0,10)
-    .map(([id,count]) => ({ing: getIngredient(id), count}))
-    .filter(x => x.ing);
-  const staleThreshold = Date.now() - STALE_DAYS*24*3600*1000;
-  const stale = state.ingredients.filter(i => {
-    const t = Date.parse(i.last_updated || i.updated_at || 0);
-    return isFinite(t) && t < staleThreshold;
-  });
-
-  document.getElementById('dashboard-kpis').innerHTML = `
-    <div class="kpi"><div class="kpi-label">登録メニュー</div><div class="kpi-value">${recipes}</div></div>
-    <div class="kpi"><div class="kpi-label">食材マスタ</div><div class="kpi-value">${ings}</div></div>
-    <div class="kpi"><div class="kpi-label">平均原価率</div><div class="kpi-value ${avgCR>0.35?'warn':'accent'}">${withSelling.length?fmt(avgCR*100,1)+'%':'–'}</div></div>
-    <div class="kpi"><div class="kpi-label">要改善(35%超)</div><div class="kpi-value ${highCR.length?'warn':''}">${highCR.length}</div></div>
-    <div class="kpi"><div class="kpi-label">価格更新必要</div><div class="kpi-value ${stale.length?'warn':''}">${stale.length}</div></div>
-  `;
-  const extraWrap = document.getElementById('dashboard-extra');
-  if(extraWrap){
-    const highCRBlock = highCR.length ? `<div class="dash-block">
-      <div class="dash-block-title">⚠ 原価率35%超のメニュー (${highCR.length})</div>
-      <ul class="dash-list">${highCR.slice(0,8).map(x=>`<li><a onclick="openRecipe('${x.r.id}')">${esc(x.r.name)}</a><span class="dash-val warn">${fmt(x.c.cost_ratio*100,1)}%</span></li>`).join('')}${highCR.length>8?`<li class="muted">他 ${highCR.length-8}件</li>`:''}</ul>
-    </div>` : '';
-    const marginHighBlock = top5MarginHigh.length ? `<div class="dash-block">
-      <div class="dash-block-title">💰 粗利額が高いメニュー TOP5</div>
-      <ol class="dash-list">${top5MarginHigh.map(x=>`<li><a onclick="openRecipe('${x.r.id}')">${esc(x.r.name)}</a><span class="dash-val accent">¥${fmt(x.c.margin,0)}</span></li>`).join('')}</ol>
-    </div>` : '';
-    const marginLowBlock = top5MarginLow.length ? `<div class="dash-block">
-      <div class="dash-block-title">📉 粗利額が低いメニュー TOP5</div>
-      <ol class="dash-list">${top5MarginLow.map(x=>`<li><a onclick="openRecipe('${x.r.id}')">${esc(x.r.name)}</a><span class="dash-val ${x.c.margin<0?'warn':'muted'}">¥${fmt(x.c.margin,0)}</span></li>`).join('')}</ol>
-    </div>` : '';
-    const usageBlock = top10Usage.length ? `<div class="dash-block">
-      <div class="dash-block-title">📋 よく使う食材 TOP10</div>
-      <ol class="dash-list">${top10Usage.map(x=>`<li><a onclick="openIngModal('${x.ing.id}')">${esc(x.ing.name)}</a><span class="dash-val muted">${x.count}件</span></li>`).join('')}</ol>
-    </div>` : '';
-    const staleBlock = stale.length ? `<div class="dash-block">
-      <div class="dash-block-title">⏰ 価格更新が必要な食材 (${STALE_DAYS}日以上)</div>
-      <ul class="dash-list">${stale.slice(0,8).map(i=>`<li><a onclick="openIngModal('${i.id}')">${esc(i.name)}</a><span class="dash-val muted">${daysAgo(i.last_updated)}日前</span></li>`).join('')}${stale.length>8?`<li class="muted">他 ${stale.length-8}件</li>`:''}</ul>
-    </div>` : '';
-    extraWrap.innerHTML = highCRBlock + marginHighBlock + marginLowBlock + usageBlock + staleBlock;
+  const wrap = document.getElementById('home-mini-kpi');
+  if(wrap){
+    wrap.innerHTML = `
+      <div class="mini-kpi">
+        <div class="mini-kpi-label">登録レシピ</div>
+        <div class="mini-kpi-value">${recipes}</div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-label">食材数</div>
+        <div class="mini-kpi-value">${ings}</div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-label">見直し必要</div>
+        <div class="mini-kpi-value ${highCR.length?'warn':''}">${highCR.length}</div>
+      </div>
+    `;
   }
-  document.getElementById('hero-stamp').textContent = recipes ? `${recipes}メニュー / ${ings}食材 / ${nowStamp()}` : 'データ未登録';
 }
+// 旧名 renderHero への呼び出しを互換維持
+function renderHero(){ renderHome(); }
 
 function daysAgo(iso){
   const t = Date.parse(iso||0);
@@ -388,52 +398,61 @@ function daysAgo(iso){
   return Math.max(0, Math.floor((Date.now()-t)/(24*3600*1000)));
 }
 
-// ============ レシピ一覧 ============
-function renderRecipeCategoryFilter(){
-  const sel = document.getElementById('filter-recipe-category');
-  const cats = Array.from(new Set(state.recipes.map(r=>r.category))).sort();
-  const cur = sel.value || 'all';
-  sel.innerHTML = '<option value="all">カテゴリ: すべて</option>' + cats.map(c=>`<option value="${esc(c)}">カテゴリ: ${esc(c)}</option>`).join('');
-  sel.value = cur;
+// ============ 📋 レシピ一覧 (スタッフUI) ============
+function renderRecipeCatTabs(){
+  const wrap = document.getElementById('recipe-cat-tabs');
+  if(!wrap) return;
+  const cats = Array.from(new Set(state.recipes.map(r=>r.category).filter(Boolean))).sort();
+  const all = state.recipes.length;
+  const buttons = [`<button class="big-cat-btn ${state.recipeListCat==='all'?'active':''}" onclick="setRecipeListCat('all')">すべて<span class="cnt">${all}</span></button>`];
+  cats.forEach(c => {
+    const cnt = state.recipes.filter(r => r.category===c).length;
+    buttons.push(`<button class="big-cat-btn ${state.recipeListCat===c?'active':''}" onclick="setRecipeListCat('${esc(c)}')">${esc(c)}<span class="cnt">${cnt}</span></button>`);
+  });
+  wrap.innerHTML = buttons.join('');
+}
+function setRecipeListCat(c){
+  state.recipeListCat = c;
+  renderRecipeList();
 }
 
 function renderRecipeList(){
-  renderRecipeCategoryFilter();
-  const cat = document.getElementById('filter-recipe-category').value;
-  const q = document.getElementById('search-recipe').value.trim().toLowerCase();
+  renderRecipeCatTabs();
+  const cat = state.recipeListCat;
+  const qEl = document.getElementById('search-recipe');
+  const q = qEl ? qEl.value.trim().toLowerCase() : '';
   const list = state.recipes.filter(r =>
     (cat==='all'||r.category===cat) &&
     (!q || (r.name||'').toLowerCase().includes(q))
   );
   const wrap = document.getElementById('recipe-list');
+  if(!wrap) return;
   if(!list.length){
-    wrap.innerHTML = '<div class="empty-note">レシピがありません。「＋ 新規レシピ」または 設定タブから「炭火焼鶏餃子 一式」を追加してください。</div>';
+    wrap.innerHTML = '<div class="empty-note">📋 まだレシピがありません<br><br><button class="big-primary-btn" onclick="newRecipe()">＋ 新しい料理を作る</button></div>';
     return;
   }
   wrap.innerHTML = list.map(r => {
     const c = calcRecipe(r);
-    const sel = state.selectedListId===r.id?' selected':'';
-    const crClass = c.selling>0 ? costRateClass(c.cost_ratio) : '';
-    const crBadge = c.selling>0
-      ? `<div class="rc-cr-badge ${crClass}">${fmt(c.cost_ratio*100,1)}%</div>`
-      : '<div class="rc-cr-badge muted">–</div>';
-    const marginInfo = c.selling>0
-      ? `<div>粗利 <b>¥${fmt(c.margin,0)}</b></div>`
-      : '';
-    return `<div class="recipe-card${sel}${c.over_target?' over-target':''}" onclick="openRecipe('${r.id}')" oncontextmenu="selectInList(event,'${r.id}')">
-      <div class="rc-top-row">
-        <div class="rc-cat">${esc(r.category||'-')}</div>
-        ${crBadge}
-      </div>
+    let pillClass = 'muted';
+    let pillText = '–';
+    if(c.selling > 0){
+      const cls = costRateClass(c.cost_ratio);
+      pillClass = cls==='cr-low'?'good':(cls==='cr-mid'?'warn':'high');
+      pillText = fmt(c.cost_ratio*100, 0) + '%';
+    }
+    const margin = c.selling>0 ? `<div>粗利 <b>¥${fmt(c.margin,0)}</b></div>` : '';
+    const sellingDisp = c.selling>0 ? `<div>販売 <b>¥${fmt(c.selling,0)}</b></div>` : '';
+    return `<div class="recipe-card-staff" onclick="openRecipe('${r.id}')">
+      <div class="rc-cat-tag">${esc(r.category||'未分類')}</div>
+      <div class="rc-cr-pill ${pillClass}">${pillText}</div>
       <div class="rc-name">${esc(r.name||'(無題)')}</div>
-      <div class="rc-stats">
-        <div>材料 <b>${r.items.length}</b></div>
-        <div>1皿 <b>¥${fmt(c.per_plate_cost,0)}</b></div>
-        ${marginInfo}
+      <div class="rc-meta">
+        <div>原価 <b>¥${fmt(c.per_plate_cost,0)}</b></div>
+        ${sellingDisp}
+        ${margin}
       </div>
     </div>`;
   }).join('');
-  document.getElementById('btn-duplicate').disabled = !state.selectedListId;
 }
 
 function selectInList(e,id){
@@ -467,10 +486,8 @@ function duplicateSelected(){
 function openRecipe(id){
   const r = getRecipe(id);
   if(!r) return;
-  showTab('recipes');
   state.currentRecipeId = id;
-  document.getElementById('recipe-list-pane').style.display = 'none';
-  document.getElementById('recipe-edit-pane').style.display = '';
+  showTab('edit');
   document.getElementById('edit-name').value = r.name;
   document.getElementById('edit-category').value = r.category || '';
   document.getElementById('edit-servings').value = num(r.servings, 1);
@@ -481,17 +498,77 @@ function openRecipe(id){
   if(tm) tm.value = num(r.target_margin, 0);
   const simInput = document.getElementById('sim-trial-price');
   if(simInput) simInput.value = '';
-  document.getElementById('save-stamp').textContent = r.updated_at ? `最終保存 ${new Date(r.updated_at).toLocaleString('ja-JP')}` : '';
+  const stampEl = document.getElementById('save-stamp');
+  if(stampEl) stampEl.textContent = r.updated_at ? `最終保存 ${new Date(r.updated_at).toLocaleString('ja-JP')}` : '自動保存されます';
   renderItems();
   recompute();
 }
 
 function backToList(){
   state.currentRecipeId = null;
-  document.getElementById('recipe-list-pane').style.display = '';
-  document.getElementById('recipe-edit-pane').style.display = 'none';
-  renderRecipeList();
-  renderHero();
+  showTab('list');
+}
+
+// 自動保存(編集中の入力を debounce で保存)
+function autoSaveCurrent(){
+  const r = getCurrent(); if(!r) return;
+  writeBackForm(r);
+  recompute();
+  if(state.autoSaveTimer) clearTimeout(state.autoSaveTimer);
+  state.autoSaveTimer = setTimeout(() => {
+    r.updated_at = new Date().toISOString();
+    saveState();
+    const stamp = document.getElementById('save-stamp');
+    if(stamp) stamp.textContent = '✓ 自動保存しました ' + nowStamp();
+  }, 600);
+}
+
+// 編集メニュー(三点)
+function toggleEditMenu(){
+  const menu = document.getElementById('edit-more-menu');
+  if(!menu) return;
+  menu.style.display = menu.style.display === 'none' ? '' : 'none';
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('edit-more-menu');
+  if(!menu || menu.style.display === 'none') return;
+  if(!e.target.closest('.more-btn') && !e.target.closest('.more-menu')) {
+    menu.style.display = 'none';
+  }
+});
+
+function duplicateCurrent(){
+  toggleEditMenu();
+  const src = getCurrent(); if(!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = uid('rec');
+  copy.name = src.name + ' (複製)';
+  copy.items = copy.items.map(it => Object.assign({}, it, {id: uid('it')}));
+  state.recipes.push(copy);
+  saveState();
+  openRecipe(copy.id);
+}
+
+function exportCurrentRecipeCSV(){
+  toggleEditMenu();
+  const r = getCurrent(); if(!r) return;
+  const c = calcRecipe(r);
+  const header = ['recipe','category','servings','selling_price','plate_cost','cost_ratio_pct','margin','target_rate_pct','ingredient','quantity','unit','cost'];
+  const lines = [csvLine(header)];
+  c.rows.forEach(x => {
+    lines.push(csvLine([
+      r.name, r.category||'', num(r.servings,1), num(r.selling_price,0),
+      num(c.per_plate_cost,0).toFixed(2),
+      num(c.cost_ratio*100,1).toFixed(1),
+      num(c.margin,0).toFixed(2),
+      num(c.target_rate*100,1).toFixed(1),
+      x.ingredient ? x.ingredient.name : '(未選択)',
+      num(x.qty,3).toFixed(3), x.unit||'g',
+      num(x.cost,2).toFixed(2),
+    ]));
+  });
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  downloadBlob(blob, `${r.name||'recipe'}-${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 function deleteCurrent(){
@@ -530,25 +607,19 @@ function buildIngredientOptionsFiltered(category){
   return list.map(i => `<option value="${i.id}">${esc(i.name)}</option>`).join('');
 }
 
-// ----- 材料行 -----
+// ----- 材料行 (スタッフUI: タップで数量編集) -----
 function renderItems(){
   const r = getCurrent(); if(!r) return;
   const wrap = document.getElementById('item-list');
   if(!r.items.length){
-    wrap.innerHTML = '<div class="empty-note small">材料がありません。「＋ 材料追加」から追加してください。</div>';
+    wrap.innerHTML = '<div class="empty-note small">まだ材料がありません<br>下の「＋ 材料を追加する」を押してください</div>';
     return;
   }
-  wrap.innerHTML = r.items.map((it,idx)=>renderItemCard(it,idx)).join('');
+  wrap.innerHTML = r.items.map(it => renderItemCardStaff(it)).join('');
 }
 
-function renderItemCard(it, idx){
+function renderItemCardStaff(it){
   const ing = getIngredient(it.ingredient_id);
-  const category = it.selected_category || (ing ? ing.category : '');
-  const catOpts = INGREDIENT_CATS.map(c => `<option value="${c}"${category===c?' selected':''}>${c}</option>`).join('');
-  const ingOpts = buildIngredientOptionsFiltered(category);
-  const ingOptsWithSelected = it.ingredient_id
-    ? ingOpts.replace(`value="${it.ingredient_id}"`, `value="${it.ingredient_id}" selected`)
-    : ingOpts;
   const price = effectivePrice(it);
   const qty = num(it.quantity, 0);
   const unit = it.unit || 'g';
@@ -557,36 +628,15 @@ function renderItemCard(it, idx){
   const raw_qty = qty / yield_rate;
   const unitPrice = (unit === '個' || unit === '枚' || unit === '本') ? num(price) : num(price)/1000;
   const cost = (price!=null && ing) ? (raw_qty * unitPrice) : 0;
-  const unitOpts = ['g','ml','個','枚','本'].map(u => `<option value="${u}"${unit===u?' selected':''}>${u}</option>`).join('');
-  const priceInfo = ing ? priceInfoHtml(ing) : '<span class="muted">未選択</span>';
-  return `<div class="item-card" data-id="${it.id}">
-    <div class="item-row-main">
-      <div class="item-selects-wrap">
-        <select class="item-cat-select" onchange="updateItem('${it.id}','selected_category',this.value)">
-          <option value="">カテゴリ</option>
-          ${catOpts}
-        </select>
-        <select class="item-ing-select" onchange="updateItem('${it.id}','ingredient_id',this.value)" ${!category?'disabled':''}>
-          <option value="">${category?'(食材を選択)':'(先にカテゴリを選択)'}</option>
-          ${ingOptsWithSelected}
-        </select>
-      </div>
-      <button class="icon-del" onclick="removeItem('${it.id}')" title="削除">🗑</button>
+  const name = ing ? esc(ing.name) : '<span class="warn">⚠ 食材を選んでください</span>';
+  const noIngClass = ing ? '' : ' no-ing';
+  return `<div class="item-card-staff${noIngClass}" data-id="${it.id}">
+    <div class="ic-edit-area" onclick="openQtyModalForItem('${it.id}')">
+      <div class="ic-name">${name}</div>
+      <div class="ic-qty">${fmt(qty,1)} ${esc(unit)}</div>
     </div>
-    <div class="item-row-fields">
-      <label class="inline-field qty">
-        <span>使用量</span>
-        <input type="number" step="0.1" value="${qty}" onchange="updateItem('${it.id}','quantity',this.value)">
-      </label>
-      <label class="inline-field unit">
-        <span>単位</span>
-        <select onchange="updateItem('${it.id}','unit',this.value)">${unitOpts}</select>
-      </label>
-    </div>
-    <div class="item-row-info">
-      ${priceInfo}
-      <span class="item-cost">原価 <b>¥${fmt(cost,2)}</b></span>
-    </div>
+    <div class="ic-cost">¥${fmt(cost,0)}</div>
+    <button class="ic-del" onclick="removeItem('${it.id}')" aria-label="削除">🗑</button>
   </div>`;
 }
 
@@ -625,17 +675,17 @@ function updateItem(id, key, value){
 }
 
 function addItem(){
-  const r = getCurrent(); if(!r) return;
-  r.items.push(makeItem());
-  renderItems();
-  recompute();
+  // 旧APIの互換: ピッカーを開く
+  openIngPicker();
 }
 
 function removeItem(id){
   const r = getCurrent(); if(!r) return;
+  if(!confirm('この材料を削除しますか?')) return;
   r.items = r.items.filter(i=>i.id!==id);
   renderItems();
   recompute();
+  autoSaveCurrent();
 }
 
 function recompute(){
@@ -672,7 +722,7 @@ function renderPriceSim(r, c){
   const tbody = document.getElementById('sim-price-tbody');
   if(tbody){
     if(c.per_plate_cost <= 0){
-      tbody.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center">材料を入力してください</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center">材料を入力してください</td></tr>';
     } else {
       const basePrice = c.selling > 0 ? c.selling : (c.suggested_price_by_ratio || c.per_plate_cost*3);
       const center = roundToNice(basePrice, 100);
@@ -681,12 +731,11 @@ function renderPriceSim(r, c){
         const s = simulateAtPrice(c.per_plate_cost, p);
         const cls = costRateClass(s.cost_ratio);
         const marginCls = s.margin<0 ? 'cr-high' : 'accent';
-        const current = (p === c.selling) ? ' 🟢現在' : '';
+        const current = (p === c.selling) ? ' 🟢' : '';
         return `<tr class="${p===c.selling?'current-price-row':''}">
           <td>¥${fmt(p,0)}${current}</td>
-          <td class="${cls}">${fmt(s.cost_ratio*100,1)}%</td>
+          <td class="${cls}">${fmt(s.cost_ratio*100,0)}%</td>
           <td class="${marginCls}"><b>¥${fmt(s.margin,0)}</b></td>
-          <td>${fmt(s.margin_ratio*100,1)}%</td>
         </tr>`;
       }).join('');
     }
@@ -703,7 +752,23 @@ function renderBigKPI(r, c){
   if(crBig){ crBig.textContent = c.selling>0 ? fmt(c.cost_ratio*100,1)+'%' : '–'; crBig.className = 'big-metric '+crClass; }
   const marginBig = document.getElementById('margin-big');
   if(marginBig){ marginBig.textContent = c.selling>0 ? '¥'+fmt(c.margin,0) : '–'; marginBig.className = 'big-metric '+(c.selling<=0?'muted':(c.margin<0?'cr-high':'accent')); }
-  // サブ: 1人前原価
+  // ステータスバンド (スタッフ向け1行サマリ)
+  const band = document.getElementById('cr-status-band');
+  if(band){
+    if(c.per_plate_cost <= 0){
+      band.textContent = '材料を入れると原価が出ます';
+      band.className = 'cr-status-band';
+    } else if(c.selling <= 0){
+      band.textContent = '販売価格を入れると粗利が見えます';
+      band.className = 'cr-status-band';
+    } else {
+      const cls = costRateClass(c.cost_ratio);
+      const status = cls==='cr-low' ? {label:'良い 👍', cls:'good'} : (cls==='cr-mid' ? {label:'注意 ⚠', cls:'warn'} : {label:'見直し 🔴', cls:'high'});
+      band.textContent = `原価率 ${fmt(c.cost_ratio*100,1)}% (${status.label}) / 1人前 ¥${fmt(c.per_serving_cost,0)} / 何人前 ${fmt(c.servings,0)}`;
+      band.className = 'cr-status-band ' + status.cls;
+    }
+  }
+  // 旧UIの sub-* / sim-warning は新HTMLには無いので存在チェックで安全に
   setText('sub-per-serving', '¥'+fmt(c.per_serving_cost,1));
   setText('sub-servings', fmt(c.servings,0));
   setText('sub-margin-ratio', c.selling>0 ? fmt(c.margin_ratio*100,1)+'%' : '–');
@@ -725,16 +790,15 @@ function renderCostDetail(r, c){
   const wrap = document.getElementById('cost-detail-tbody');
   if(!wrap) return;
   if(!c.rows.length){
-    wrap.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center">材料がありません</td></tr>';
+    wrap.innerHTML = '<tr><td colspan="4" class="muted" style="text-align:center">材料がありません</td></tr>';
   } else {
     wrap.innerHTML = c.rows.map(x => {
       const name = x.ingredient ? esc(x.ingredient.name) : '<span class="muted">(未選択)</span>';
       return `<tr>
         <td style="text-align:left">${name}</td>
         <td>${fmt(x.qty,1)} ${esc(x.unit||'g')}</td>
-        <td>${fmt(x.raw_qty,1)}</td>
-        <td>¥${fmt(x.cost,2)}</td>
-        <td>${fmt(x.cost_ratio_of_total*100,1)}%</td>
+        <td>¥${fmt(x.cost,0)}</td>
+        <td>${fmt(x.cost_ratio_of_total*100,0)}%</td>
       </tr>`;
     }).join('');
   }
@@ -1351,11 +1415,243 @@ function seedAll(){
   alert('炭火焼鶏餃子 一式を追加しました');
 }
 
+// ============ 💴 食材価格(閲覧用・スタッフ向け) ============
+function renderPriceCatTabs(){
+  const wrap = document.getElementById('price-cat-tabs');
+  if(!wrap) return;
+  const counts = {};
+  state.ingredients.forEach(i => { counts[i.category] = (counts[i.category]||0) + 1; });
+  const all = state.ingredients.length;
+  const labels = {肉:'🥩 肉', 魚:'🐟 魚', 野菜:'🥬 野菜', 調味料:'🧂 調味料', 皮:'📄 皮', その他:'📦 その他'};
+  const buttons = [`<button class="big-cat-btn ${state.priceCat==='all'?'active':''}" onclick="setPriceCat('all')">すべて<span class="cnt">${all}</span></button>`];
+  INGREDIENT_CATS.forEach(c => {
+    if(!counts[c]) return;
+    buttons.push(`<button class="big-cat-btn ${state.priceCat===c?'active':''}" onclick="setPriceCat('${c}')">${labels[c]||c}<span class="cnt">${counts[c]}</span></button>`);
+  });
+  wrap.innerHTML = buttons.join('');
+}
+function setPriceCat(c){
+  state.priceCat = c;
+  renderPriceView();
+}
+function renderPriceView(){
+  renderPriceCatTabs();
+  const cat = state.priceCat;
+  const qEl = document.getElementById('search-price');
+  const q = qEl ? qEl.value.trim().toLowerCase() : '';
+  const list = state.ingredients
+    .filter(i => cat==='all'||i.category===cat)
+    .filter(i => !q || (i.name||'').toLowerCase().includes(q))
+    .sort((a,b) => (a.name||'').localeCompare(b.name||'','ja'));
+  const wrap = document.getElementById('price-list');
+  const sumEl = document.getElementById('price-summary');
+  if(sumEl){
+    const stale = state.ingredients.filter(i => {
+      const t = Date.parse(i.last_updated||i.updated_at||0);
+      return isFinite(t) && t < (Date.now() - STALE_DAYS*24*3600*1000);
+    }).length;
+    sumEl.textContent = `${state.ingredients.length}件登録 ${stale ? `/ ⚠ ${stale}件は${STALE_DAYS}日以上更新なし`:''}`;
+  }
+  if(!wrap) return;
+  if(!list.length){
+    wrap.innerHTML = '<div class="empty-note">登録された食材がありません<br><br><button class="ghost-btn-big" onclick="showTab(\'admin\')">管理者メニューで追加する</button></div>';
+    return;
+  }
+  // カテゴリ別グルーピング
+  if(cat === 'all'){
+    const byCat = {};
+    INGREDIENT_CATS.forEach(c => byCat[c] = []);
+    list.forEach(i => (byCat[i.category]||byCat['その他']).push(i));
+    let html = '';
+    INGREDIENT_CATS.forEach(c => {
+      if(!byCat[c].length) return;
+      html += `<div class="price-group-title">${esc(c)} (${byCat[c].length})</div>`;
+      html += byCat[c].map(i => priceRowHtml(i)).join('');
+    });
+    wrap.innerHTML = html;
+  } else {
+    wrap.innerHTML = list.map(i => priceRowHtml(i)).join('');
+  }
+}
+function priceRowHtml(i){
+  const actual = num(i.actual_purchase_price, i.kg_price||0);
+  const std = num(i.standard_price, i.kg_price||0);
+  const price = actual || std;
+  const days = daysAgo(i.last_updated);
+  const stale = (typeof days==='number' && days >= STALE_DAYS);
+  const updatedText = isFinite(days) ? (days===0?'今日':`${days}日前`) : '–';
+  return `<div class="price-row${stale?' stale':''}">
+    <div class="pr-name">${esc(i.name)}</div>
+    <div class="pr-price">¥${fmt(price,0)}<span class="muted-sub">/${esc(i.unit||'kg')}</span></div>
+    <div class="pr-updated">更新: ${updatedText}</div>
+  </div>`;
+}
+
+// ============ 🥬 食材ピッカー(レシピへの材料追加) ============
+function openIngPicker(itemId){
+  state.pickerEditingItemId = itemId || null;
+  if(!state.pickerCat || !state.ingredients.some(i => i.category === state.pickerCat)){
+    // 最初に存在するカテゴリを選択
+    const first = INGREDIENT_CATS.find(c => state.ingredients.some(i => i.category === c));
+    state.pickerCat = first || '肉';
+  }
+  document.getElementById('ing-picker').style.display = 'flex';
+  const sEl = document.getElementById('ing-picker-search');
+  if(sEl) sEl.value = '';
+  renderIngPicker();
+  setTimeout(() => sEl && sEl.focus(), 50);
+}
+function closeIngPicker(){ document.getElementById('ing-picker').style.display = 'none'; }
+function closeIngPickerBg(e){ if(e.target.id==='ing-picker') closeIngPicker(); }
+function setPickerCat(c){
+  state.pickerCat = c;
+  renderIngPicker();
+}
+function renderIngPicker(){
+  const cats = document.getElementById('ing-picker-cats');
+  const labels = {肉:'🥩 肉', 魚:'🐟 魚', 野菜:'🥬 野菜', 調味料:'🧂 調味料', 皮:'📄 皮', その他:'📦 その他'};
+  const counts = {};
+  state.ingredients.forEach(i => counts[i.category] = (counts[i.category]||0)+1);
+  if(cats){
+    cats.innerHTML = INGREDIENT_CATS
+      .filter(c => counts[c])
+      .map(c => `<button class="big-cat-btn ${state.pickerCat===c?'active':''}" onclick="setPickerCat('${c}')">${labels[c]||c}<span class="cnt">${counts[c]}</span></button>`)
+      .join('');
+  }
+  const sEl = document.getElementById('ing-picker-search');
+  const q = sEl ? sEl.value.trim().toLowerCase() : '';
+  const list = state.ingredients
+    .filter(i => q ? (i.name||'').toLowerCase().includes(q) : i.category === state.pickerCat)
+    .sort((a,b) => (a.name||'').localeCompare(b.name||'','ja'));
+  const wrap = document.getElementById('ing-picker-list');
+  if(!wrap) return;
+  if(!list.length){
+    wrap.innerHTML = '<div class="empty-note small" style="grid-column:1/-1">該当する食材がありません<br><br><button class="ghost-btn-big" onclick="closeIngPicker(); showTab(\'admin\')">管理者メニューで追加</button></div>';
+    return;
+  }
+  wrap.innerHTML = list.map(i => {
+    const actual = num(i.actual_purchase_price, i.kg_price||0);
+    const std = num(i.standard_price, i.kg_price||0);
+    const price = actual || std;
+    return `<button class="picker-item" onclick="pickIngredient('${i.id}')">
+      <div class="pi-name">${esc(i.name)}</div>
+      <div class="pi-price">¥${fmt(price,0)}/${esc(i.unit||'kg')}</div>
+      <div class="pi-cat">${esc(i.category)}</div>
+    </button>`;
+  }).join('');
+}
+function pickIngredient(id){
+  const ing = getIngredient(id); if(!ing) return;
+  closeIngPicker();
+  // 既存材料を編集中ならその材料を差し替え、新規なら新規行作成
+  const r = getCurrent();
+  if(!r){ return; }
+  if(state.pickerEditingItemId){
+    const it = r.items.find(x => x.id === state.pickerEditingItemId);
+    if(it){
+      it.ingredient_id = id;
+      it.selected_category = ing.category;
+      if(ing.unit === 'kg' || ing.unit === 'L' || !ing.unit) it.unit = it.unit || 'g';
+      else it.unit = ing.unit;
+    }
+    state.pickerEditingItemId = null;
+    renderItems();
+    recompute();
+    autoSaveCurrent();
+  } else {
+    // 数量モーダルを開く(新規材料)
+    openQtyModalForNew(id);
+  }
+}
+
+// ============ 数量入力モーダル ============
+function openQtyModalForNew(ingId){
+  const ing = getIngredient(ingId); if(!ing) return;
+  state.qtyEditing = {itemId: null, ingId};
+  showQtyModal(ing, 0, defaultUnitForIng(ing));
+}
+function openQtyModalForItem(itemId){
+  const r = getCurrent(); if(!r) return;
+  const it = r.items.find(x => x.id === itemId); if(!it) return;
+  if(!it.ingredient_id){
+    // 食材未設定 → ピッカー(差し替え)
+    state.pickerEditingItemId = itemId;
+    openIngPicker();
+    return;
+  }
+  const ing = getIngredient(it.ingredient_id);
+  state.qtyEditing = {itemId, ingId: it.ingredient_id};
+  showQtyModal(ing, num(it.quantity,0), it.unit||'g');
+}
+function defaultUnitForIng(ing){
+  if(!ing) return 'g';
+  if(ing.unit === '個' || ing.unit === '枚' || ing.unit === '本') return ing.unit;
+  if(ing.unit === 'L') return 'ml';
+  return 'g';
+}
+function showQtyModal(ing, qty, unit){
+  const titleEl = document.getElementById('qty-modal-title');
+  const nameEl = document.getElementById('qty-ing-name');
+  const priceEl = document.getElementById('qty-ing-price');
+  if(titleEl) titleEl.textContent = state.qtyEditing.itemId ? '使用量を変更' : '材料を追加';
+  if(nameEl) nameEl.textContent = ing ? ing.name : '(未選択)';
+  if(priceEl){
+    const actual = num(ing?.actual_purchase_price, ing?.kg_price||0);
+    const std = num(ing?.standard_price, ing?.kg_price||0);
+    const price = actual || std;
+    priceEl.textContent = ing ? `仕入価格: ¥${fmt(price,0)}/${ing.unit||'kg'}` : '';
+  }
+  const qtyInput = document.getElementById('qty-modal-qty');
+  const unitSel = document.getElementById('qty-modal-unit');
+  if(qtyInput) qtyInput.value = qty || '';
+  if(unitSel) unitSel.value = unit || 'g';
+  document.getElementById('qty-modal').style.display = 'flex';
+  setTimeout(() => qtyInput && qtyInput.focus(), 50);
+}
+function closeQtyModal(){
+  document.getElementById('qty-modal').style.display = 'none';
+  state.qtyEditing = {itemId:null, ingId:null};
+}
+function closeQtyModalBg(e){ if(e.target.id==='qty-modal') closeQtyModal(); }
+function qtyQuickAdd(n){
+  const inp = document.getElementById('qty-modal-qty');
+  if(!inp) return;
+  inp.value = num(inp.value, 0) + n;
+}
+function qtyQuickClear(){
+  const inp = document.getElementById('qty-modal-qty');
+  if(inp) inp.value = '';
+}
+function saveQtyModal(){
+  const r = getCurrent(); if(!r) return;
+  const qty = num(document.getElementById('qty-modal-qty').value, 0);
+  const unit = document.getElementById('qty-modal-unit').value || 'g';
+  if(qty <= 0){ alert('使用量を入力してください'); return; }
+  if(state.qtyEditing.itemId){
+    const it = r.items.find(x => x.id === state.qtyEditing.itemId);
+    if(it){
+      it.quantity = qty;
+      it.unit = unit;
+    }
+  } else if(state.qtyEditing.ingId){
+    const ing = getIngredient(state.qtyEditing.ingId);
+    r.items.push(makeItem({
+      ingredient_id: state.qtyEditing.ingId,
+      selected_category: ing ? ing.category : null,
+      quantity: qty,
+      unit,
+    }));
+  }
+  closeQtyModal();
+  renderItems();
+  recompute();
+  autoSaveCurrent();
+}
+
 // ============ 起動 ============
 function init(){
   loadState();
-  renderHero();
-  renderRecipeList();
+  showTab('home');
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
