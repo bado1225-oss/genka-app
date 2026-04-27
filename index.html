@@ -39,19 +39,13 @@
     </div>
   </div>
 
-  <!-- ============== セグメント(下部固定タブ) ============== -->
+  <!-- ============== セグメント(下部固定タブ・3つに簡素化) ============== -->
   <div class="bottom-tabs" id="bottom-tabs">
     <button class="bottom-tab active" id="seg-home" onclick="showTab('home')">
       <span class="bt-ico">🏠</span><span class="bt-lbl">ホーム</span>
     </button>
-    <button class="bottom-tab" id="seg-calc" onclick="goCalcOrList()">
-      <span class="bt-ico">🧮</span><span class="bt-lbl">原価計算</span>
-    </button>
-    <button class="bottom-tab" id="seg-list" onclick="showTab('list')">
-      <span class="bt-ico">📋</span><span class="bt-lbl">レシピ</span>
-    </button>
-    <button class="bottom-tab" id="seg-price" onclick="showTab('price')">
-      <span class="bt-ico">💴</span><span class="bt-lbl">食材価格</span>
+    <button class="bottom-tab" id="seg-staff" onclick="showTab('staff')">
+      <span class="bt-ico">🧮</span><span class="bt-lbl">現場モード</span>
     </button>
     <button class="bottom-tab" id="seg-admin" onclick="showTab('admin')">
       <span class="bt-ico">⚙️</span><span class="bt-lbl">管理者</span>
@@ -65,39 +59,33 @@
       <div class="home-greeting">
         <div class="home-hello">こんにちは 👋</div>
         <div class="home-date" id="home-date"></div>
-        <div class="home-tip">いま何をしますか？大きなボタンを押してください。</div>
+        <div class="home-tip">下の大きなボタンを押してください。</div>
       </div>
-      <div class="home-tile-grid">
-        <button class="home-tile primary" onclick="goCalc()">
+      <div class="home-tile-grid home-tile-2">
+        <button class="home-tile primary tall" onclick="showTab('staff')">
           <div class="home-tile-icon">🧮</div>
-          <div class="home-tile-title">原価を計算する</div>
-          <div class="home-tile-desc">料理を選ぶ → 材料を入れる → 原価が出る</div>
+          <div class="home-tile-title">現場モード</div>
+          <div class="home-tile-desc">料理の原価を計算する<br>(スタッフ向け)</div>
         </button>
-        <button class="home-tile" onclick="showTab('list')">
-          <div class="home-tile-icon">📋</div>
-          <div class="home-tile-title">レシピを見る</div>
-          <div class="home-tile-desc">登録した料理の一覧</div>
-        </button>
-        <button class="home-tile" onclick="showTab('price')">
-          <div class="home-tile-icon">💴</div>
-          <div class="home-tile-title">食材価格を確認する</div>
-          <div class="home-tile-desc">いまの仕入れ価格</div>
-        </button>
-        <button class="home-tile dark" onclick="showTab('admin')">
+        <button class="home-tile dark tall" onclick="showTab('admin')">
           <div class="home-tile-icon">⚙️</div>
-          <div class="home-tile-title">管理者メニュー</div>
-          <div class="home-tile-desc">編集・バックアップ・サンプル</div>
+          <div class="home-tile-title">管理者モード</div>
+          <div class="home-tile-desc">食材登録・単価変更・<br>バックアップなど</div>
         </button>
+      </div>
+      <div class="home-secondary">
+        <button class="home-link-btn" onclick="showTab('price')">💴 食材価格を見るだけ</button>
       </div>
       <div class="home-mini-kpi" id="home-mini-kpi"></div>
     </div>
 
-    <!-- ============== 📋 レシピ一覧 ============== -->
+    <!-- ============== 🧮 現場モード入口(レシピ一覧) ============== -->
     <div id="view-list" style="display:none;">
-      <div class="page-header">
-        <div class="page-title">📋 レシピ一覧</div>
-        <button class="big-primary-btn" onclick="newRecipe()">＋ 新しい料理</button>
+      <div class="staff-intro">
+        <div class="page-title">🧮 現場モード</div>
+        <div class="staff-intro-tip">料理を選ぶか、新しく作ってください。3ステップで原価が出ます。</div>
       </div>
+      <button class="big-primary-btn full tall-btn" onclick="newRecipe()">＋ 新しい料理を作る</button>
       <input id="search-recipe" class="big-search" placeholder="🔍 料理名で探す" oninput="renderRecipeList()">
       <div class="big-cat-tabs" id="recipe-cat-tabs"></div>
       <div id="recipe-list" class="recipe-grid"></div>
@@ -107,7 +95,7 @@
     <div id="view-edit" style="display:none;">
       <div class="edit-header-simple">
         <button class="back-btn-big" onclick="showTab('list')">← 戻る</button>
-        <input id="edit-name" class="edit-title-input-big" placeholder="料理の名前" oninput="autoSaveCurrent()">
+        <div class="edit-header-title" id="edit-header-title">料理の原価計算</div>
         <button class="more-btn" onclick="toggleEditMenu()" aria-label="メニュー">⋮</button>
         <div class="more-menu" id="edit-more-menu" style="display:none">
           <button onclick="duplicateCurrent()">📋 複製する</button>
@@ -116,53 +104,68 @@
         </div>
       </div>
 
-      <!-- 大KPI -->
+      <!-- 結果カード(大KPI + 評価) -->
       <div class="kpi-big-card-staff">
-        <div class="big-kpi-grid">
+        <div class="result-eval-row">
+          <div class="result-eval-badge" id="result-eval-badge">⏳ 入力待ち</div>
+        </div>
+        <div class="big-kpi-grid kpi-3rows">
           <div class="big-kpi">
-            <div class="big-kpi-label">1皿の原価</div>
+            <div class="big-kpi-label">作るのにかかった金額</div>
             <div id="plate-cost-big" class="big-metric muted">¥0</div>
           </div>
           <div class="big-kpi">
-            <div class="big-kpi-label">原価率</div>
-            <div id="cr-big" class="big-metric muted">–</div>
-          </div>
-          <div class="big-kpi">
-            <div class="big-kpi-label">粗利</div>
+            <div class="big-kpi-label">もうけ</div>
             <div id="margin-big" class="big-metric muted">–</div>
           </div>
+          <div class="big-kpi">
+            <div class="big-kpi-label">利益バランス</div>
+            <div id="cr-big" class="big-metric muted">–</div>
+          </div>
         </div>
-        <div class="cr-status-band" id="cr-status-band">販売価格を入力すると粗利が見えます</div>
+        <div class="cr-status-band" id="cr-status-band">下のステップを入力してください</div>
       </div>
 
-      <!-- 販売価格 -->
-      <div class="staff-card">
-        <div class="staff-card-title">💴 販売価格</div>
+      <!-- Step 1: 料理名 -->
+      <div class="step-card">
+        <div class="step-head"><span class="step-num">1</span><span class="step-title">料理の名前</span></div>
+        <div class="step-help">まず料理名を入れてください</div>
+        <input id="edit-name" class="big-input step-input" placeholder="例: 鶏の唐揚げ" oninput="autoSaveCurrent()">
+      </div>
+
+      <!-- Step 2: 食材 -->
+      <div class="step-card">
+        <div class="step-head"><span class="step-num">2</span><span class="step-title">食材を入れる</span></div>
+        <div class="step-help">使う食材を選んで、量を入れてください</div>
+        <div id="item-list" class="item-list-staff"></div>
+        <button class="big-primary-btn full tall-btn" onclick="openIngPicker()">＋ 食材を追加する</button>
+      </div>
+
+      <!-- Step 3: 売る値段 -->
+      <div class="step-card">
+        <div class="step-head"><span class="step-num">3</span><span class="step-title">売る値段</span></div>
+        <div class="step-help">最後に売る値段を入れると、もうけが分かります</div>
         <div class="big-input-row">
           <span class="yen-prefix">¥</span>
           <input type="number" id="edit-selling-price" class="big-input" step="10" value="0" oninput="autoSaveCurrent()" placeholder="0">
         </div>
-        <div class="muted-tip">値段を入れると粗利と原価率が自動で出ます</div>
       </div>
 
-      <!-- 材料 -->
-      <div class="staff-card">
-        <div class="staff-card-title">🥬 材料</div>
-        <div id="item-list" class="item-list-staff"></div>
-        <button class="big-primary-btn full" onclick="openIngPicker()">＋ 材料を追加する</button>
+      <div class="staff-finish-tip">
+        ✅ ここまで入れたら、上の結果カードを確認してください
       </div>
 
-      <!-- 詳細設定(畳み込み) -->
-      <details class="details-card">
-        <summary>⚙️ 詳細設定 (人前・目標など)</summary>
+      <!-- 詳細設定(管理者向け・現場では畳んでおく) -->
+      <details class="details-card admin-only-details">
+        <summary>⚙️ 詳細設定 (管理者向け・人前/目標)</summary>
         <div class="grid-2-staff">
           <label class="big-label">何人前 / 1皿
             <input type="number" id="edit-servings" class="big-input small" step="1" min="1" value="1" oninput="autoSaveCurrent()">
           </label>
-          <label class="big-label">目標原価率 (%)
+          <label class="big-label">目標 利益バランス (%)
             <input type="number" id="edit-target-cr" class="big-input small" step="0.1" value="30" oninput="autoSaveCurrent()">
           </label>
-          <label class="big-label">目標粗利 (円・任意)
+          <label class="big-label">目標 もうけ (円・任意)
             <input type="number" id="edit-target-margin" class="big-input small" step="10" value="0" oninput="autoSaveCurrent()">
           </label>
           <label class="big-label">カテゴリ (任意)
@@ -179,40 +182,38 @@
         </label>
       </details>
 
-      <!-- 売値と利益を見る(旧:販売価格シミュレーター) -->
-      <details class="details-card">
-        <summary>📊 売値と利益を見る</summary>
+      <details class="details-card admin-only-details">
+        <summary>📊 売値と もうけ を見る (管理者向け)</summary>
         <div class="sugg-grid">
           <div class="sugg-card">
-            <div class="sugg-label">おすすめ販売価格<br><small>(目標原価率から)</small></div>
+            <div class="sugg-label">おすすめ売値<br><small>(目標利益バランスから)</small></div>
             <div id="sim-sugg-by-ratio" class="sugg-value accent">–</div>
           </div>
           <div class="sugg-card">
-            <div class="sugg-label">おすすめ販売価格<br><small>(目標粗利から)</small></div>
+            <div class="sugg-label">おすすめ売値<br><small>(目標もうけから)</small></div>
             <div id="sim-sugg-by-margin" class="sugg-value accent">–</div>
           </div>
         </div>
         <label class="big-label">この値段ならどう?
           <div class="big-input-row">
             <span class="yen-prefix">¥</span>
-            <input type="number" id="sim-trial-price" class="big-input" step="10" placeholder="任意の販売価格" oninput="recompute()">
+            <input type="number" id="sim-trial-price" class="big-input" step="10" placeholder="任意の売値" oninput="recompute()">
           </div>
         </label>
         <div id="sim-trial-result" class="sim-trial-result">値段を入れると結果が出ます</div>
         <div class="ing-table-wrap">
           <table class="ing-table compact">
-            <thead><tr><th>販売価格</th><th>原価率</th><th>粗利</th></tr></thead>
+            <thead><tr><th>売値</th><th>利益バランス</th><th>もうけ</th></tr></thead>
             <tbody id="sim-price-tbody"></tbody>
           </table>
         </div>
       </details>
 
-      <!-- 原価詳細 -->
-      <details class="details-card">
-        <summary>📑 材料ごとの原価内訳</summary>
+      <details class="details-card admin-only-details">
+        <summary>📑 材料ごとの仕入れ代 (管理者向け)</summary>
         <div class="ing-table-wrap">
           <table class="ing-table compact">
-            <thead><tr><th>材料</th><th>使用量</th><th>原価</th><th>割合</th></tr></thead>
+            <thead><tr><th>材料</th><th>使用量</th><th>仕入れ代</th><th>割合</th></tr></thead>
             <tbody id="cost-detail-tbody"></tbody>
           </table>
         </div>

@@ -319,44 +319,40 @@ function costRateClass(cost_ratio){
 // ============ タブ制御 ============
 function showTab(tab){
   // 旧タブ名のエイリアス
-  const alias = {recipes:'list', master:'price', settings:'admin'};
+  const alias = {recipes:'list', master:'price', settings:'admin', calc:'staff'};
   if(alias[tab]) tab = alias[tab];
-  const tabs = ['home','calc','list','price','admin','edit'];
-  tabs.forEach(t => {
-    const seg = document.getElementById('seg-'+t);
-    if(seg) seg.classList.toggle('active', t===tab || (t==='calc' && tab==='edit'));
-    const view = document.getElementById('view-'+t);
-    if(view) view.style.display = t===tab ? '' : 'none';
+  // 'staff' タブはレシピ一覧 or 編集画面に解決
+  let resolvedTab = tab;
+  if(tab === 'staff'){
+    resolvedTab = (state.currentRecipeId && getCurrent()) ? 'edit' : 'list';
+  }
+  const views = ['home','list','edit','price','admin'];
+  views.forEach(v => {
+    const view = document.getElementById('view-'+v);
+    if(view) view.style.display = v===resolvedTab ? '' : 'none';
   });
-  state.currentTab = tab;
-  if(tab==='home'){ renderHome(); }
-  if(tab==='list'){ state.currentRecipeId = null; renderRecipeList(); }
-  if(tab==='price'){ renderPriceView(); }
-  if(tab==='admin'){ renderMaster(); }
+  // 下部タブのアクティブ状態: home / staff(=list/edit) / admin
+  const segMap = {home:'seg-home', list:'seg-staff', edit:'seg-staff', price:'seg-home', admin:'seg-admin'};
+  ['seg-home','seg-staff','seg-admin'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('active', segMap[resolvedTab]===id);
+  });
+  state.currentTab = resolvedTab;
+  if(resolvedTab==='home'){ renderHome(); }
+  if(resolvedTab==='list'){ state.currentRecipeId = null; renderRecipeList(); }
+  if(resolvedTab==='price'){ renderPriceView(); }
+  if(resolvedTab==='admin'){ renderMaster(); }
   // ヘッダーサブテキスト
   const sub = document.getElementById('header-sub');
   if(sub){
-    const labels = {home:'スタッフ用シンプル画面', list:'登録レシピ一覧', edit:'原価計算', price:'食材の現在価格', admin:'管理者メニュー'};
-    sub.textContent = labels[tab] || '';
+    const labels = {home:'スタッフ用シンプル画面', list:'🧮 現場モード', edit:'🧮 原価を計算する', price:'食材の現在価格', admin:'⚙️ 管理者モード'};
+    sub.textContent = labels[resolvedTab] || '';
   }
 }
 
-// ホーム→原価計算: レシピがあれば一覧へ、無ければ新規作成
-function goCalc(){
-  if(!state.recipes.length){
-    newRecipe();
-    return;
-  }
-  showTab('list');
-}
-function goCalcOrList(){
-  // 編集中なら編集画面継続、それ以外はレシピ一覧
-  if(state.currentRecipeId && getCurrent()){
-    showTab('edit');
-  } else {
-    showTab('list');
-  }
-}
+// 旧 goCalc / goCalcOrList(後方互換)
+function goCalc(){ showTab('staff'); }
+function goCalcOrList(){ showTab('staff'); }
 
 // ホーム画面: 4タイル + ミニKPI
 function renderHome(){
@@ -440,14 +436,14 @@ function renderRecipeList(){
       pillClass = cls==='cr-low'?'good':(cls==='cr-mid'?'warn':'high');
       pillText = fmt(c.cost_ratio*100, 0) + '%';
     }
-    const margin = c.selling>0 ? `<div>粗利 <b>¥${fmt(c.margin,0)}</b></div>` : '';
-    const sellingDisp = c.selling>0 ? `<div>販売 <b>¥${fmt(c.selling,0)}</b></div>` : '';
+    const margin = c.selling>0 ? `<div>もうけ <b>¥${fmt(c.margin,0)}</b></div>` : '';
+    const sellingDisp = c.selling>0 ? `<div>売値 <b>¥${fmt(c.selling,0)}</b></div>` : '';
     return `<div class="recipe-card-staff" onclick="openRecipe('${r.id}')">
       <div class="rc-cat-tag">${esc(r.category||'未分類')}</div>
       <div class="rc-cr-pill ${pillClass}">${pillText}</div>
       <div class="rc-name">${esc(r.name||'(無題)')}</div>
       <div class="rc-meta">
-        <div>原価 <b>¥${fmt(c.per_plate_cost,0)}</b></div>
+        <div>仕入れ代 <b>¥${fmt(c.per_plate_cost,0)}</b></div>
         ${sellingDisp}
         ${margin}
       </div>
@@ -489,6 +485,8 @@ function openRecipe(id){
   state.currentRecipeId = id;
   showTab('edit');
   document.getElementById('edit-name').value = r.name;
+  const head = document.getElementById('edit-header-title');
+  if(head) head.textContent = r.name || '料理の原価計算';
   document.getElementById('edit-category').value = r.category || '';
   document.getElementById('edit-servings').value = num(r.servings, 1);
   document.getElementById('edit-notes').value = r.notes || '';
@@ -590,6 +588,8 @@ function saveCurrent(){
 
 function writeBackForm(r){
   r.name = document.getElementById('edit-name').value || '(無題)';
+  const head = document.getElementById('edit-header-title');
+  if(head) head.textContent = r.name;
   r.category = document.getElementById('edit-category').value || '';
   r.servings = Math.max(1, num(document.getElementById('edit-servings').value, 1));
   r.notes = document.getElementById('edit-notes').value || '';
@@ -752,19 +752,32 @@ function renderBigKPI(r, c){
   if(crBig){ crBig.textContent = c.selling>0 ? fmt(c.cost_ratio*100,1)+'%' : '–'; crBig.className = 'big-metric '+crClass; }
   const marginBig = document.getElementById('margin-big');
   if(marginBig){ marginBig.textContent = c.selling>0 ? '¥'+fmt(c.margin,0) : '–'; marginBig.className = 'big-metric '+(c.selling<=0?'muted':(c.margin<0?'cr-high':'accent')); }
-  // ステータスバンド (スタッフ向け1行サマリ)
+  // 評価バッジ (🟢優秀 / 🟡普通 / 🔴見直し)
+  const badge = document.getElementById('result-eval-badge');
+  if(badge){
+    if(c.per_plate_cost <= 0 || c.selling <= 0){
+      badge.textContent = '⏳ 入力待ち';
+      badge.className = 'result-eval-badge';
+    } else {
+      const cls = costRateClass(c.cost_ratio);
+      if(cls === 'cr-low'){ badge.textContent = '🟢 優秀'; badge.className = 'result-eval-badge good'; }
+      else if(cls === 'cr-mid'){ badge.textContent = '🟡 普通'; badge.className = 'result-eval-badge warn'; }
+      else { badge.textContent = '🔴 見直し'; badge.className = 'result-eval-badge high'; }
+    }
+  }
+  // ステータスバンド (1行サマリ・補助)
   const band = document.getElementById('cr-status-band');
   if(band){
     if(c.per_plate_cost <= 0){
-      band.textContent = '材料を入れると原価が出ます';
+      band.textContent = 'まず食材を入れてください (Step 2)';
       band.className = 'cr-status-band';
     } else if(c.selling <= 0){
-      band.textContent = '販売価格を入れると粗利が見えます';
+      band.textContent = '売る値段を入れると もうけが見えます (Step 3)';
       band.className = 'cr-status-band';
     } else {
       const cls = costRateClass(c.cost_ratio);
-      const status = cls==='cr-low' ? {label:'良い 👍', cls:'good'} : (cls==='cr-mid' ? {label:'注意 ⚠', cls:'warn'} : {label:'見直し 🔴', cls:'high'});
-      band.textContent = `原価率 ${fmt(c.cost_ratio*100,1)}% (${status.label}) / 1人前 ¥${fmt(c.per_serving_cost,0)} / 何人前 ${fmt(c.servings,0)}`;
+      const status = cls==='cr-low' ? {cls:'good'} : (cls==='cr-mid' ? {cls:'warn'} : {cls:'high'});
+      band.textContent = `売値 ¥${fmt(c.selling,0)} − 仕入れ代 ¥${fmt(c.per_plate_cost,0)} = もうけ ¥${fmt(c.margin,0)}`;
       band.className = 'cr-status-band ' + status.cls;
     }
   }
